@@ -29,6 +29,7 @@ getAutoProxyURL() {
 	done
 	unset IFS
 }
+## MAIN
 $debug && echo "debug mode enabled"
 
 if $debug; then
@@ -36,7 +37,7 @@ if $debug; then
 	getAutoProxyURL
 	echo ""
 fi
-	# Disable Automatic Proxy Configuration
+# Disable Automatic Proxy Configuration
 #networksetup -setautoproxyurl "Wi-Fi" ""
 echo "update autoproxystate set values to off"
 networksetup -setautoproxystate "Wi-Fi" off
