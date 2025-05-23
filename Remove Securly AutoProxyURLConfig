@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Get the primary Wi-Fi interface name (typically en0, but this ensures accuracy)
+#WIFI_INTERFACE=$(networksetup -listallhardwareports | awk '/Wi-Fi|AirPort/{getline; print $2}')
+
+# Disable Automatic Proxy Configuration
+#networksetup -setautoproxyurl "Wi-Fi" ""
+networksetup -setautoproxystate "Wi-Fi" off
+networksetup -setautoproxystate "USB 10/100/1000 LAN" off
+
+
+echo "Automatic Proxy Configuration removed for interface: Wi-Fi"
