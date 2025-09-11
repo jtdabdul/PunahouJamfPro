@@ -1,0 +1,31 @@
+#!/bin/bash
+#pass in process name to attempt to pkill
+
+##Jamf Script General
+# Display Name
+#  pkill process
+# Category
+#  Uninstallers
+# Notes
+#created on 2023/01/17 by JA
+#use a parameter to pass in process name.  old script did not handle if process not running and returned error.  This script should echo a message if process not found instead of returning error.  Either way process should not be running at end of execution (either it was running and was pkilled, or it wasn't running in the first place.
+#Use as part of an uninstall bundle - pkill process, Remove Files or Directories with args, optional Remove User Files or Directories with args
+
+
+###############################################
+###  Handle Parameters
+###############################################
+
+#JSS_URL="https://punahou.jamfcloud.com"
+####### JSS URL #####################
+if [[ "$4" != "" ]] && [[ $process == "" ]]; then
+    process=$4
+fi
+####### Test for values
+if [[ "$process" == "" ]]; then
+    echo "Check parameter values: not found - exiting with error"
+    echo "process : $process"
+    exit 1
+fi
+pkill $process || echo "process $process not found"
+exit 0

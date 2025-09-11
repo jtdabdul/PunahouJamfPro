@@ -1,0 +1,68 @@
+#!/bin/bash
+##Jamf Script General
+#Display NameDisplay name for the script
+#  Remove Files or Directories with args
+#CategoryCategory to add the script to
+#  Uninstallers
+#InformationInformation to display to the administrator when the script is run
+#NotesNotes to display about the script (e.g., who created it and when it was created)
+#Created 2020/08/25 by JA
+#pass in full paths for files or directories to remove from client
+#2023/10/20 added comments to explain the loop to run function on each argument, enumerate the use of $1, $2, $3 in jamf scripts
+#############
+pathToScript=$0
+pathToPackage=$1
+targetLocation=$2
+targetVolume=$3
+
+#enumerate args
+#for((i=1;i<=$#;i++)); do
+#	echo "${!i}"
+#done
+echo "entering Remove Files with Arguments"
+
+if [ ! $# > 4 ]; then {
+	echo "No arguments found.  Arguments expected"
+	exit 1
+} else {
+	echo "At least one argument found."
+}
+fi
+
+function removeFileOrDirectory () {
+	arg1=$1
+	#test to see if arg1 exists
+	if [[ -e $arg1 ]]; then {
+		echo "$arg1 exists"
+		#test to see if $arg1 is a file
+		if [[ -f $arg1 ]]; then {
+			echo "$arg1 is a file"
+			echo "remove $arg1"
+            echo "rm $arg1"
+			rm "$arg1" || echo "rm failed on $arg1"
+		} elif [[ -d $arg1 ]]; then {
+			echo "$arg1 is a directory"
+			echo "remove $arg1 recursive"
+			echo "rm -rf $arg1"
+            rm -rf "$arg1" || echo "rm -rf failed on $arg1"
+		}
+	    fi
+	} else {
+	echo "$arg1 does not exist"
+	}
+    fi
+}
+
+
+#while arg-1 is non-empty, keep looping
+#i starts at 4 because the first three args are predefined by jamf
+#$1 = Mount point of the target drive. This is / if you're booted to the target or /Volumes/targetDrive if you're not booted to it.
+#$2 = the computer name
+#$3 = the current user's shortname
+for((i=4;i<=$#;i++)); do
+	if [[ ! -z "${!i}" ]]; then
+		echo "${!i}"
+		removeFileOrDirectory "${!i}"
+	fi
+done
+exit 0
