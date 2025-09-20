@@ -109,9 +109,22 @@ handle_pkg () {
 		exit 1
 	fi
 }
+removeQuarantineFlag() {
+	#added as function on 2025/09/19 by JA
+	#test for a value in $appname parameter, and only attempt to remove quarantine flag if $appname is provided
+	echo "entered Remove Quarantine Flag function"
+	if [ ! -z "$appname" ]; then
+		echo "App name $appname provided, Remove Quarantine Flag"
+		xattr -rc "/Applications/$appname"
+		###
+		/bin/sleep 5
+	else
+		echo "No App name parameter found, skip Remove Quarantine Flag"
+	fi
+}
 cleanup () {
 	echo "entered cleanup function"
-	echo "Deleting downloaded file."
+	echo "Deleting downloaded file $file."
 	/bin/rm /tmp/"${file}"
 }
 ####### Main  ###############
@@ -144,12 +157,8 @@ if [ $ext = "dmg" ]; then {
 }
 fi
 #added by JA on 2021/06/08 - try to get rid of the "App is downloaded from the internet" Warning
-echo "Remove Quarantine Flag..."
-xattr -rc "/Applications/$appname"
-###
-/bin/sleep 5
-
-echo "Deleting downloaded file."
-/bin/rm /tmp/"${file}"
-
+#modified by JA on 2025/09/19 - convert Remove Quarantine Flag steps into function, call function
+removeQuarantineFlag
+#modified by JA on 2025/09/19 - call cleanup function instead
+cleanup
 exit 0
