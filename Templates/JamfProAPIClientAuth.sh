@@ -2,8 +2,8 @@
 #
 ####################################################################################################
 #
-#	Code snippet based on Client Credentials Authorization recipe found at 
-#	https://developer.jamf.com/jamf-pro/docs/client-credentials
+#   Code snippet based on Client Credentials Authorization recipe found at 
+#   https://developer.jamf.com/jamf-pro/docs/client-credentials
 #
 #####################################################################################################
 #
@@ -17,18 +17,19 @@
 #   
 #   This template is intended for use as a header to Jamf policy scripts which utilize the Jamf Pro API.
 #   It is based on a developer.jamf.com code snippet.  Our environment requires us to obscure the 
-#	client secret by encrypting it and passing the encrypted string as a parameter, holding the salt and 
-#	passphrase in the script body so that the client secret can be decrypted by the script and used to 
-#	obtain the bearer token.
-#	Parameters 4-6 will contain the jamf pro URL, the client ID, and the client secret (encrypted)
+#   client secret by encrypting it and passing the encrypted string as a parameter, holding the salt and 
+#   passphrase in the script body so that the client secret can be decrypted by the script and used to 
+#   obtain the bearer token.
+#   Parameters 4-6 will contain the jamf pro URL, the client ID, and the client secret (encrypted)
 # 
 # DESCRIPTION
 #   
 #   This template is intended to be used as a header for Jamf Pro API scripts.  Parameters 7-11 are
-#	still available for scripts that use this template.
+#   still available for scripts that use this template.
 #
-#	FYI - Jamf code snippet assumes minimum macOS version 12, Thanks to RTrouton's derflounder (link below)
-#	this code can extract an access_token in macOS < 12 
+#   FYI - Jamf code snippet assumes minimum macOS version 12, Thanks to RTrouton's derflounder (link below)
+#   this code can extract an access_token in macOS < 12.  If you do not need support for macOS 11 or earlier,
+#   you can replace the getAccessToken function in this file with the linked Jamf recipe (as of 2025/10/16)
 # 
 ####################################################################################################
 #
@@ -36,6 +37,7 @@
 #
 #   Version: 1.0 by https://developer.jamf.com/jamf-pro/docs/client-credentials
 #   Modified on 2025/10/16 by Jason Abdul to add parameter handling and client secret decryption to the workflow
+#   include macos <12 support with RTrouton's code (linked below)
 #
 ####################################################################################################
 
@@ -94,26 +96,26 @@ function DecryptString() {
 # client_secret="yourClientSecret"
 
 getAccessToken() {
-	response=$(curl --silent --location --request POST "${url}/api/oauth/token" \
- 	 	--header "Content-Type: application/x-www-form-urlencoded" \
- 		--data-urlencode "client_id=${client_id}" \
- 		--data-urlencode "grant_type=client_credentials" \
- 		--data-urlencode "client_secret=${client_secret}")
- 	## Courtesy of Der Flounder
+    response=$(curl --silent --location --request POST "${url}/api/oauth/token" \
+        --header "Content-Type: application/x-www-form-urlencoded" \
+        --data-urlencode "client_id=${client_id}" \
+        --data-urlencode "grant_type=client_credentials" \
+        --data-urlencode "client_secret=${client_secret}")
+    ## Courtesy of Der Flounder
     ## Source: https://derflounder.wordpress.com/2021/12/10/obtaining-checking-and-renewing-bearer-tokens-for-the-jamf-pro-api/
     ## Successfully added this code to extract the token from macOS version < 12 Monterey, but this does not handle the expiration or expirationEpoch like the jamf recipe does
     ## Jamf recipe assumes minimum OS version 12
     if [[ $(/usr/bin/sw_vers -productVersion | awk -F . '{print $1}') -lt 12 ]]; then   
         access_token=$(/usr/bin/awk -F \" 'NR==2{print $4}' <<< "$response" | /usr/bin/xargs)
     else
-    	access_token=$(echo "$response" | plutil -extract access_token raw -)
- 		token_expires_in=$(echo "$response" | plutil -extract expires_in raw -)
- 	fi
- 	token_expiration_epoch=$(($current_epoch + $token_expires_in - 1))
+        access_token=$(echo "$response" | plutil -extract access_token raw -)
+        token_expires_in=$(echo "$response" | plutil -extract expires_in raw -)
+    fi
+    token_expiration_epoch=$(($current_epoch + $token_expires_in - 1))
 }
 
 checkTokenExpiration() {
- 	current_epoch=$(date +%s)
+    current_epoch=$(date +%s)
     if [[ token_expiration_epoch -ge current_epoch ]]
     then
         echo "Token valid until the following epoch time: " "$token_expiration_epoch"
@@ -124,41 +126,59 @@ checkTokenExpiration() {
 }
 
 invalidateToken() {
-	responseCode=$(curl -w "%{http_code}" -H "Authorization: Bearer ${access_token}" $url/api/v1/auth/invalidate-token -X POST -s -o /dev/null)
-	if [[ ${responseCode} == 204 ]]
-	then
-		echo "Token successfully invalidated"
-		access_token=""
-		token_expiration_epoch="0"
-	elif [[ ${responseCode} == 401 ]]
-	then
-		echo "Token already invalid"
-	else
-		echo "An unknown error occurred invalidating the token"
-	fi
+    responseCode=$(curl -w "%{http_code}" -H "Authorization: Bearer ${access_token}" $url/api/v1/auth/invalidate-token -X POST -s -o /dev/null)
+    if [[ ${responseCode} == 204 ]]
+    then
+        echo "Token successfully invalidated"
+        access_token=""
+        token_expiration_epoch="0"
+    elif [[ ${responseCode} == 401 ]]
+    then
+        echo "Token already invalid"
+    else
+        echo "An unknown error occurred invalidating the token"
+    fi
 }
 ################################################
 ###  Main Block
 ################################################
+
+########################
+### Setup Environment ###
+
 #Variable declarations
-#access_token=""
-#token_expiration_epoch="0"
+access_token=""
+token_expiration_epoch="0"
 
 #decode the secret with the salt and passphrase
 #if you intend to pass the client secret unencrypted to this script then comment the next line of code
 client_secret=$(DecryptString "$client_secret" "$salt" "$passphrase")
 
-## included in recipe to validate that the recipe functions are working.  You may comment out this code block and replace with your logic
+### End Setup Environment ###
+
+########################
+### Sample Usage code from Recipe 
+
+## You may comment out this code block and replace with your logic
 ## checkTokenExpiration will get an access token if none is currently active
-checkTokenExpiration
-curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
-checkTokenExpiration
-invalidateToken
-curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
+# checkTokenExpiration
+# curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
+# checkTokenExpiration
+# invalidateToken
+# curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
+### End Sample Code ###
 
+########################
 ### Your Code Here
+########################
 
+checkTokenExpiration
+
+########################
+
+########################
 ### Clean up
 invalidateToken
 # Verify token is successfully invalidated (optional)  Output at end of script should be {"httpStatus" : 401,"errors" : [ ]}
-curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
+#curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
+exit 0
