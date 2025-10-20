@@ -2,27 +2,8 @@
 #
 ####################################################################################################
 #
-# Copyright (c) 2016, JAMF Software, LLC.  All rights reserved.
-#
-#       This script was written by JAMF Software
-#
-#       THIS SOFTWARE IS PROVIDED BY JAMF SOFTWARE, LLC "AS IS" AND ANY
-#       EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-#       WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-#       DISCLAIMED. IN NO EVENT SHALL JAMF SOFTWARE, LLC BE LIABLE FOR ANY
-#       DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-#       (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-#       LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-#       ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-#       (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-#       SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-#####################################################################################################
-#
-# SUPPORT FOR THIS PROGRAM
-#
-#       This program is distributed "as is" by JAMF Software. For more information or
-#       support for this script, please contact your JAMF Software Account Manager.
+#   Code snippet based on Client Credentials Authorization recipe found at 
+#   https://developer.jamf.com/jamf-pro/docs/client-credentials
 #
 #####################################################################################################
 #
@@ -30,21 +11,36 @@
 #
 # NAME
 #   
-#   uploadClientLogs.sh
+#   JamfAPIEraseDevice.sh
 #
 # SYNOPSIS - How to use
 #   
-#   Add this script to Jamf so we can use it within a policy.  Please modify the variables below under
-#   the JSS Variables section.  Once those steps are completed, please create a policy and add this script
-#   using the script payload.  Scope the policy to the computers we wish to upload logs for.
+#   Script is intended to be used in a Jamf policy run from the client side.  Jamf Pro API will be utilized to 
+#   obtain the client's Jamf Id, then use the v2 post mdm command ERASE_DEVICE to Erase all Contents and Settings
+#   on the client.  Optional argument can be included to delete the client from Jamf Pro, ensuring that any
+#   static groups or other customizations on the computer do not survive re-enroll.
+#
+
+#   This template is intended for use as a header to Jamf policy scripts which utilize the Jamf Pro API.
+#   It is based on a developer.jamf.com code snippet.  Our environment requires us to obscure the 
+#   client secret by encrypting it and passing the encrypted string as a parameter, holding the salt and 
+#   passphrase in the script body so that the client secret can be decrypted by the script and used to 
+#   obtain the bearer token.
+#   Parameters 4-6 will contain the jamf pro URL, the client ID, and the client secret (encrypted)
 # 
 # DESCRIPTION
+#
+#   This script will erase a client computer and optiionally delete it from the Jamf Pro server.
 #   
-#   This script will silently compress client side logs and upload them to the device record within
-#   Jamf.  The end users will not be needed for any part of this policy and will run at an admins
-#   discretion.  After the logs are uploaded to the devices inventory record, we are cleaning up the
-#   compressed logs on the client side.
+#   Template JamfProAPIClientAuth.sh
+#   This template is intended to be used as a header for Jamf Pro API scripts.  Parameters 7-11 are
+#   still available for scripts that use this template.
+#
+#   FYI - Jamf code snippet assumes minimum macOS version 12, Thanks to RTrouton's derflounder (link below)
+#   this code can extract an access_token in macOS < 12.  If you do not need support for macOS 11 or earlier,
+#   you can replace the getAccessToken function in this file with the linked Jamf recipe (as of 2025/10/16)
 # 
+####################################################################################################
 ####################################################################################################
 #
 # HISTORY
@@ -52,6 +48,8 @@
 #   Version: 1.0 by Lucas Vance @ JAMF Software 11-4-16
 #   Modified on 12/28/2022 by Jason Abdul to update API Authenticationt to Bearer Token
 #   Modified on 6/6/2023 by Jason Abdul to repurpose for API EraseDevice command to be sent to the calling computer
+#   Modified on 2025/10/16 by Jason Abdul to utilize Template JamfProAPIClientAuth.sh to update auth
+#       method to clientID/clientSecret and update Jamf Api Classic calls to Jamf Pro Api
 #
 ####################################################################################################
 ####################################################################################################
@@ -75,107 +73,112 @@
 # Parameter 6
 # Password
 # Parameter 7
+# Delete device (TRUE||FALSE) (optional) Default FALSE
+# Parameter 8
 # Passcode (optional)
 ####################################################################################################
-
-user="" # API account name
-pass="" # Password for API account
-#url="https://punahou.jamfcloud.com" # JPS URL including port, please leave out trailing slash, ex. https://jamf.jss.com:8443
-
 ###############################################
 ###  Handle Parameters
 ###############################################
 
-#JSS_URL="https://punahou.jamfcloud.com"
-####### JSS URL #####################
-if [[ "$4" != "" ]] && [[ $URL == "" ]]; then
-    URL=$4
+####### URL #####################  
+if [[ "$4" != "" ]] && [[ $url == "" ]]; then
+    url=$4
 fi
-####### JJS Admin User ##############
-if [[ "$5" != "" ]] && [[ $apiUsername == "" ]]; then
-    apiUsername=$5
+####### API Client ##############
+if [[ "$5" != "" ]] && [[ $client_id == "" ]]; then
+    client_id=$5
 fi
-####### JSS Admin User Password Encrypted #######
-if [[ "$6" != "" ]] && [[ $apiPassword == "" ]]; then
-    apiPassword=$6
+####### API Client Secret Encrypted #######
+if [[ "$6" != "" ]] && [[ $client_secret == "" ]]; then
+    client_secret=$6
 fi
-####### JSS Admin User Password Encrypted #######
-if [[ "$7" != "" ]] && [[ $passcode == "" ]]; then
-    passcode=$7
+####### Delete device from Jamf Pro (TRUE || FALSE) #######
+if [[ "$7" != "" ]] && [[ $delete == "" ]]; then
+    delete=$7
+else
+    delete="FALSE"
+fi
+####### Passcode #######
+if [[ "$8" != "" ]] && [[ $passcode == "" ]]; then
+    passcode=$8
 else
     passcode=123456
 fi
-
 ####### Test for values
-if [[ "$URL" == "" ]] || [[ "$apiUsername" == "" ]] || [[ "$apiPassword" == "" ]] || [[ "$passcode" == "" ]]; then
+if [[ "$url" == "" ]] || [[ "$client_id" == "" ]] || [[ "$client_secret" == "" ]]; then
     echo "Check parameter values - exiting with error"
-    echo "URL : $URL"
-    echo "apiUsername : $apiUsername"
-    echo "apiPassword : $apiPassword"
-    echo "passcode : $passcode"
+    echo "URL : $url"
+    echo "API Client ID : $client_id"
+    echo "API Client Secret (encrypted): $client_secret"
     exit 1
 fi
+
 ##############################################
 ###  Environment Variables
 ##############################################
-#salt="13406516bc72d4e1"
-#passphrase="a13d932cb16d82acf26448e4"
-salt="7a47a720d45987ec"
-passphrase="570fa57d04b22c39059d1e99"
+# These values are obtained by running the encryptString function
+# These values will need to be re-generated and updated in the script each time the client secret is rotated
+salt="b46124640ded7e1e"
+passphrase="1b51f10e36b1ae7a4f8d87f5"
 ##############################################
 
 ##############################################
 ###  Functions
 ##############################################
-# Include DecryptString() with your script to decrypt the password sent by the JSS
+# Added on 2025/10/16 by JA to handle secret decryption
+# Include DecryptString() with your script to decrypt the password sent by the Jamf policy
 # The 'Salt' and 'Passphrase' values would be present in the script
 function DecryptString() {
     # Usage: ~$ DecryptString "Encrypted String" "Salt" "Passphrase"
 #    echo "${1}" | /usr/bin/openssl enc -aes256 -d -a -A -S "${2}" -k "${3}"
     #add args to openssl command to handle Ventura 2023/01/25 by JA
     echo "${1}" | /usr/bin/openssl enc -md md5 -aes256 -d -a -A -S "${2}" -k "${3}"
-
 }
-#Variable declarations
-bearerToken=""
-tokenExpirationEpoch="0"
-username=$apiUsername
-password=$(DecryptString "$apiPassword" "$salt" "$passphrase")
 
-getBearerToken() {
-    response=$(curl -s -u "$username":"$password" "$URL"/api/v1/auth/token -X POST)
+# Included in Jamf recipe, but commented out to accept these values as arguments.
+# Un-comment these lines to embed credentials in your script instead (not recommended for production but could be useful in troubleshooting)
+# url="https://yourserver.jamfcloud.com"
+# client_id="your-client-id"
+# client_secret="yourClientSecret"
+
+getAccessToken() {
+    response=$(curl --silent --location --request POST "${url}/api/oauth/token" \
+        --header "Content-Type: application/x-www-form-urlencoded" \
+        --data-urlencode "client_id=${client_id}" \
+        --data-urlencode "grant_type=client_credentials" \
+        --data-urlencode "client_secret=${client_secret}")
     ## Courtesy of Der Flounder
     ## Source: https://derflounder.wordpress.com/2021/12/10/obtaining-checking-and-renewing-bearer-tokens-for-the-jamf-pro-api/
     ## Successfully added this code to extract the token from macOS version < 12 Monterey, but this does not handle the expiration or expirationEpoch like the jamf recipe does
     ## Jamf recipe assumes minimum OS version 12
     if [[ $(/usr/bin/sw_vers -productVersion | awk -F . '{print $1}') -lt 12 ]]; then   
-        bearerToken=$(/usr/bin/awk -F \" 'NR==2{print $4}' <<< "$response" | /usr/bin/xargs)
+        access_token=$(/usr/bin/awk -F \" 'NR==2{print $4}' <<< "$response" | /usr/bin/xargs)
     else
-        bearerToken=$(echo "$response" | plutil -extract token raw -)
-        tokenExpiration=$(echo "$response" | plutil -extract expires raw - | awk -F . '{print $1}')
-        #token=$(/usr/bin/plutil -extract token raw -o - - <<< "$authToken")
-    fi  
-    tokenExpirationEpoch=$(date -j -f "%Y-%m-%dT%T" "$tokenExpiration" +"%s")
+        access_token=$(echo "$response" | plutil -extract access_token raw -)
+        token_expires_in=$(echo "$response" | plutil -extract expires_in raw -)
+    fi
+    token_expiration_epoch=$(($current_epoch + $token_expires_in - 1))
 }
 
 checkTokenExpiration() {
-    nowEpochUTC=$(date -j -f "%Y-%m-%dT%T" "$(date -u +"%Y-%m-%dT%T")" +"%s")
-    if [[ tokenExpirationEpoch -gt nowEpochUTC ]]
+    current_epoch=$(date +%s)
+    if [[ token_expiration_epoch -ge current_epoch ]]
     then
-        echo "Token valid until the following epoch time: " "$tokenExpirationEpoch"
+        echo "Token valid until the following epoch time: " "$token_expiration_epoch"
     else
         echo "No valid token available, getting new token"
-        getBearerToken
+        getAccessToken
     fi
 }
 
 invalidateToken() {
-    responseCode=$(curl -w "%{http_code}" -H "Authorization: Bearer ${bearerToken}" $URL/api/v1/auth/invalidate-token -X POST -s -o /dev/null)
+    responseCode=$(curl -w "%{http_code}" -H "Authorization: Bearer ${access_token}" $url/api/v1/auth/invalidate-token -X POST -s -o /dev/null)
     if [[ ${responseCode} == 204 ]]
     then
         echo "Token successfully invalidated"
-        bearerToken=""
-        tokenExpirationEpoch="0"
+        access_token=""
+        token_expiration_epoch="0"
     elif [[ ${responseCode} == 401 ]]
     then
         echo "Token already invalid"
@@ -186,26 +189,140 @@ invalidateToken() {
 ################################################
 ###  Main Block
 ################################################
-checkTokenExpiration
-#check Jamf version
-curl -s -H "Authorization: Bearer ${bearerToken}" $URL/api/v1/jamf-pro-version -X GET
 
-########## Device Serial Number Variable ##########
-#computer=$(scutil --get ComputerName)
-#echo "Computer name: $computer"
-computer=$(system_profiler SPHardwareDataType | awk '/Serial Number/{print $4}')
-########## Create an ID variable to pull in our computer ID from the JSS so we can upload our Logs to the inventory record ##########
-id=$(/usr/bin/curl -sk -H "Authorization: Bearer ${bearerToken}" -H "Accept: application/xml" $URL/JSSResource/computers/serialnumber/$computer | xmllint --xpath '/computer/general/id/text()' -)
-echo "Computer Jamf ID: $id"
-########## Send EraseDevice Command to the computer via Jamf Classic API ##########
-response=$( /usr/bin/curl \
---header "Authorization: Bearer ${bearerToken}" \
---header "Content-Type: text/xml" \
---request POST \
---silent \
---url "$URL/JSSResource/computercommands/command/EraseDevice/passcode/$passcode/id/$id" )
+########################
+### Setup Environment ###
 
+#Variable declarations
+access_token=""
+token_expiration_epoch="0"
+
+#decode the secret with the salt and passphrase
+#if you intend to pass the client secret unencrypted to this script then comment the next line of code
+client_secret=$(DecryptString "$client_secret" "$salt" "$passphrase")
+
+### End Setup Environment ###
+
+########################
+### Sample Usage code from Recipe 
+
+## You may comment out this code block and replace with your logic
+## checkTokenExpiration will get an access token if none is currently active
+# checkTokenExpiration
+# curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
+# checkTokenExpiration
+# invalidateToken
+# curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
+### End Sample Code ###
+
+########################
+### Your Code Here
+########################
+
+### Functions ##########
+getInventoryFromSerial() {
+    result="$(curl -sS -G "$url/api/v1/computers-inventory" \
+    -H "Authorization: Bearer $access_token" \
+    -H 'Accept: application/json' \
+    --data-urlencode 'section=GENERAL' \
+    --data-urlencode 'page=0' \
+    --data-urlencode 'page-size=1' \
+    --data-urlencode "filter=hardware.serialNumber==\"$serial\"")"
+    echo $result
+}
+eraseComputer() {
+    #v2 needs a computer's management ID
+    # Jamf Pro v2 - not working return code 500 even when I use swaggerUI with full admin - come back to investigate
+# curl -sS -X POST "$url/api/v2/mdm/commands" \
+#     -H "Authorization: Bearer $access_token" \
+#     -H 'accept: application/json' \
+#     -H 'content-type: application/json' \
+#     -d @- <<EOF
+# {
+#     "commandData": {
+#         "commandType": "ERASE_DEVICE",
+#         "obliterationBehavior": "DoNotObliterate"
+#     },
+#     "clientData": [
+#     {
+#         "managementId": "$managementID"
+#     }
+#   ]
+  
+# }
+# EOF
+    ### Pro v1
+    # Needs a Jamf Pro Computer ID (.results[0].id)
+    # Collect Https response code indicating success or failure of the command instead of the command output
+response=$(
+curl -s -o /dev/null -w "%{http_code}" -X POST "$url/api/v1/computer-inventory/$1/erase" \
+  -H "Authorization: Bearer $access_token" \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -d @- <<EOF
+{
+  "pin": "$passcode"
+}
+EOF
+)
 echo "$response"
-##### Clean up ###############################################
+}
+deleteComputer() {
+    response=$(curl --request DELETE \
+    --url $url/api/v2/computers-inventory/$jamfID \
+    -H "Authorization: Bearer $access_token" \
+    -H 'accept: application/json')
+    echo $response
+}
+# Function to log messages to file and echo to console
+LOG_FILE="/var/log/jamfEraseDelete.log"
+log_message() {
+    local message="$1"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $message" | tee -a "$LOG_FILE"
+}
+### End Functions #####
+
+#get bearer token if no curent token found
+checkTokenExpiration
+
+#get serial number
+serial=$(system_profiler SPHardwareDataType | awk '/Serial Number/{print $4}')
+log_message "serial: $serial"
+
+#get id from serial number
+jamfID=$(getInventoryFromSerial "$serial" | jq -r '.results[0].id')
+log_message "jamfID: $jamfID"
+
+managementID=$(getInventoryFromSerial "$serial" | jq -r '.results[0].general.managementId' )
+log_message "managementID: $managementID"
+
+#send erase device
+log_message "erase device"
+
+response=$(eraseComputer "$jamfID")
+log_message "erase response $response"
+
+if [ $response == "200" ] || [ $response == "201" ]; then
+    log_message "erase successful"
+    #optional delete device
+    if [[ $delete == "TRUE" ]]; then
+        sleep 1
+        log_message "delete device= TRUE, remove Jamf record for $jamfID"
+        response=$(deleteComputer "jamfID")
+        log_message "delete response: $response"
+     else
+        log_message "delete set to FALSE, Jamf record will not be deleted"
+    fi
+else
+    log_message "erase command failed"
+    invalidateToken
+    exit 1
+fi
+########################
+
+########################
+### Clean up
 invalidateToken
+# Verify token is successfully invalidated (optional)  Output at end of script should be {"httpStatus" : 401,"errors" : [ ]}
+curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
 exit 0
