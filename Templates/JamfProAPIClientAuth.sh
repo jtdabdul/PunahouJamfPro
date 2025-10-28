@@ -63,18 +63,9 @@ if [[ "$url" == "" ]] || [[ "$client_id" == "" ]] || [[ "$client_secret" == "" ]
     echo "Check parameter values - exiting with error"
     echo "URL : $url"
     echo "API Client ID : $client_id"
-    echo "API Client Secret (encrypted): $client_secret"
+#    echo "API Client Secret (encrypted): $client_secret"
     exit 1
 fi
-
-##############################################
-###  Environment Variables
-##############################################
-# These values are obtained by running the encryptString function
-# These values will need to be re-generated and updated in the script each time the client secret is rotated
-salt="440a343caef9a617"
-passphrase="0491df58e5c45bebc4e773ca"
-##############################################
 
 ##############################################
 ###  Functions
@@ -139,22 +130,28 @@ invalidateToken() {
         echo "An unknown error occurred invalidating the token"
     fi
 }
+
+
 ################################################
 ###  Main Block
 ################################################
 
-########################
-### Setup Environment ###
+##############################################
+###  Environment Variables
+##############################################
+# These values are obtained by running the encryptString function
+# These values will need to be re-generated and updated in the script each time the client secret is rotated
+salt="440a343caef9a617"
+passphrase="0491df58e5c45bebc4e773ca"
 
-#Variable declarations
+#Variable declarations for API 
 access_token=""
 token_expiration_epoch="0"
+##############################################
 
 #decode the secret with the salt and passphrase
 #if you intend to pass the client secret unencrypted to this script then comment the next line of code
 client_secret=$(DecryptString "$client_secret" "$salt" "$passphrase")
-
-### End Setup Environment ###
 
 ########################
 ### Sample Usage code from Recipe 
@@ -168,13 +165,15 @@ client_secret=$(DecryptString "$client_secret" "$salt" "$passphrase")
 # curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
 ### End Sample Code ###
 
-########################
+################## End API Template ##############################
+
+################################################
 ### Your Code Here
-########################
+################################################
 
 checkTokenExpiration
 
-########################
+################################################
 
 ########################
 ### Clean up
