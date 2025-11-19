@@ -50,6 +50,7 @@
 #   Modified on 6/6/2023 by Jason Abdul to repurpose for API EraseDevice command to be sent to the calling computer
 #   Modified on 2025/10/16 by Jason Abdul to utilize Template JamfProAPIClientAuth.sh to update auth
 #       method to clientID/clientSecret and update Jamf Api Classic calls to Jamf Pro Api
+#   Modified on 2025/11/18 by Jason Abdul to update eraseComputer function to use Jamf Pro API v2 to send the erase
 #
 ####################################################################################################
 ####################################################################################################
@@ -93,18 +94,7 @@ fi
 if [[ "$6" != "" ]] && [[ $client_secret == "" ]]; then
     client_secret=$6
 fi
-####### Delete device from Jamf Pro (TRUE || FALSE) #######
-if [[ "$7" != "" ]] && [[ $delete == "" ]]; then
-    delete=$7
-else
-    delete="FALSE"
-fi
-####### Passcode #######
-if [[ "$8" != "" ]] && [[ $passcode == "" ]]; then
-    passcode=$8
-else
-    passcode=123456
-fi
+
 ####### Test for values
 if [[ "$url" == "" ]] || [[ "$client_id" == "" ]] || [[ "$client_secret" == "" ]]; then
     echo "Check parameter values - exiting with error"
@@ -113,15 +103,6 @@ if [[ "$url" == "" ]] || [[ "$client_id" == "" ]] || [[ "$client_secret" == "" ]
     echo "API Client Secret (encrypted): $client_secret"
     exit 1
 fi
-
-##############################################
-###  Environment Variables
-##############################################
-# These values are obtained by running the encryptString function
-# These values will need to be re-generated and updated in the script each time the client secret is rotated
-salt="b46124640ded7e1e"
-passphrase="1b51f10e36b1ae7a4f8d87f5"
-##############################################
 
 ##############################################
 ###  Functions
@@ -190,18 +171,32 @@ invalidateToken() {
 ###  Main Block
 ################################################
 
-########################
-### Setup Environment ###
+##############################################
+###  Custom Parameters
+##############################################
+
+####### Delete device from Jamf Pro (TRUE || FALSE) #######
+if [[ "$7" != "" ]] && [[ $delete == "" ]]; then
+    delete=$7
+else
+    delete="FALSE"
+fi
+####### Passcode #######
+if [[ "$8" != "" ]] && [[ $passcode == "" ]]; then
+    passcode=$8
+else
+    passcode=123456
+fi
+
+##############################################
+###  Setup Environment
+##############################################
 
 #Variable declarations
 access_token=""
 token_expiration_epoch="0"
 
-#decode the secret with the salt and passphrase
-#if you intend to pass the client secret unencrypted to this script then comment the next line of code
-client_secret=$(DecryptString "$client_secret" "$salt" "$passphrase")
-
-### End Setup Environment ###
+### End Setup Environment ####################
 
 ########################
 ### Sample Usage code from Recipe 
@@ -215,9 +210,23 @@ client_secret=$(DecryptString "$client_secret" "$salt" "$passphrase")
 # curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
 ### End Sample Code ###
 
-########################
-### Your Code Here
-########################
+#####################################################################################
+###########################    Your Code Here
+#####################################################################################
+
+##############################################
+###  Environment Variables
+##############################################
+# These values are obtained by running the encryptString function
+# These values will need to be re-generated and updated in the script each time the client secret is rotated
+salt="b46124640ded7e1e"
+passphrase="1b51f10e36b1ae7a4f8d87f5"
+##############################################
+#decode the secret with the salt and passphrase
+#if you intend to pass the client secret unencrypted to this script then comment the next line of code
+client_secret=$(DecryptString "$client_secret" "$salt" "$passphrase")
+
+### End Setup Environment ####################
 
 ### Functions ##########
 getInventoryFromSerial() {
@@ -233,38 +242,43 @@ getInventoryFromSerial() {
 eraseComputer() {
     #v2 needs a computer's management ID
     # Jamf Pro v2 - not working return code 500 even when I use swaggerUI with full admin - come back to investigate
-# curl -sS -X POST "$url/api/v2/mdm/commands" \
-#     -H "Authorization: Bearer $access_token" \
-#     -H 'accept: application/json' \
-#     -H 'content-type: application/json' \
-#     -d @- <<EOF
-# {
-#     "commandData": {
-#         "commandType": "ERASE_DEVICE",
-#         "obliterationBehavior": "DoNotObliterate"
-#     },
-#     "clientData": [
-#     {
-#         "managementId": "$managementID"
-#     }
-#   ]
-  
-# }
-# EOF
-    ### Pro v1
-    # Needs a Jamf Pro Computer ID (.results[0].id)
-    # Collect Https response code indicating success or failure of the command instead of the command output
-response=$(
-curl -s -o /dev/null -w "%{http_code}" -X POST "$url/api/v1/computer-inventory/$1/erase" \
-  -H "Authorization: Bearer $access_token" \
-  -H "Accept: application/json" \
-  -H "Content-Type: application/json" \
-  -d @- <<EOF
+    # Needed a passcode in the data body.
+    # -w "%{http_code}" - write-out HTTP status code
+response=$(curl -sS -X POST "$url/api/v2/mdm/commands" \
+    -H "Authorization: Bearer $access_token" \
+    -H 'accept: application/json' \
+    -H 'content-type: application/json' \
+    -w "%{http_code}" \
+    -d @- <<EOF
 {
-  "pin": "$passcode"
+    "commandData": {
+        "commandType": "ERASE_DEVICE",
+        "obliterationBehavior": "DoNotObliterate",
+          "pin": "$2"
+    },
+    "clientData": [
+    {
+        "managementId": "$1"
+    }
+  ]
+  
 }
 EOF
 )
+    ### Pro v1
+    # Needs a Jamf Pro Computer ID (.results[0].id)
+    # Collect Https response code indicating success or failure of the command instead of the command output
+# response=$(
+# curl -s -o /dev/null -w "%{http_code}" -X POST "$url/api/v1/computer-inventory/$1/erase" \
+#   -H "Authorization: Bearer $access_token" \
+#   -H "Accept: application/json" \
+#   -H "Content-Type: application/json" \
+#   -d @- <<EOF
+# {
+#   "pin": "$passcode"
+# }
+# EOF
+# )
 echo "$response"
 }
 deleteComputer() {
@@ -299,11 +313,15 @@ log_message "managementID: $managementID"
 #send erase device
 log_message "erase device"
 
-response=$(eraseComputer "$jamfID")
+#response=$(eraseComputer "$jamfID")    #pass in jamfID for v1 command, managementID for v2 command
+response=$(eraseComputer "$managementID" "$passcode")
+# eraseComputer curl command includes -w "%{http_code}" to include https response code to stdout so we can get it from the response variable
 log_message "erase response $response"
 
-if [ $response == "200" ] || [ $response == "201" ]; then
-    log_message "erase successful"
+HTTP_STATUS=$(echo "${response}" | tail -c 4)   #last 4 bytes of the response should contain the http response code, tried 3 but got 01 not 201 so use -c 4
+log_message "erase response header: $HTTP_STATUS"
+if [[ $HTTP_STATUS =~ ^2 ]]; then
+    log_message "HTTP request to $url successul (2xx status code: $HTTP_STATUS)"
     #optional delete device
     if [[ $delete == "TRUE" ]]; then
         sleep 1
@@ -314,7 +332,7 @@ if [ $response == "200" ] || [ $response == "201" ]; then
         log_message "delete set to FALSE, Jamf record will not be deleted"
     fi
 else
-    log_message "erase command failed"
+    log_message "HTTP request to $url failed (status code: $HTTP_STATUS)"
     invalidateToken
     exit 1
 fi
