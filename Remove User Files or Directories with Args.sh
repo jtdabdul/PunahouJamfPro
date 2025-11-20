@@ -13,6 +13,7 @@
 # Created 2020/08/25 by JA
 # pass in partial path:  Users/$loggedInUser/path
 # 2024/07/25 - clarification - parameter should be an un-quoted string, paths which contain spaces should not escape each space with a preceding backslash added to comment documentation
+#2025/11/20 JA add error catching for "Directory not empty" on rm -rf, attempt to use find to delete all files in the directory first and then remove directory
 pathToScript=$0
 pathToPackage=$1
 targetLocation=$2
@@ -41,9 +42,7 @@ function removeCurrentlyLoggedInUserFiles () {
     local arg1=$1             # partial file path
     local loggedInUser=$2     # detected logged in user (renamed arg2 for clarity)
     local target=""           # Full path to file/directory
-    local rm_output=""        # Variable to store the output of rm -rf
-    local find_strategy="find"
-    
+   
     # Test that agr1 and arg2 are not empty
     if [[ -z $arg1 || -z $loggedInUser ]]; then
         echo "Arguments missing"
@@ -64,39 +63,7 @@ function removeCurrentlyLoggedInUserFiles () {
 
         # Test to see if $target is a directory
         elif [[ -d $target ]]; then
-            echo "$target is a directory"
-            echo "Attempt 1: rm -rf $target"
-
-            # Execute rm -rf, capture output (stdout and stderr), and check exit status
-            # The assignment needs to be done separately to capture the output reliably
-            if ! rm -rf "$target" 2>&1; then
-                rm_output=$(rm -rf "$target" 2>&1)
-                
-                # Check for the specific "Directory not empty" error in the captured output
-                if echo "$rm_output" | grep -q "Directory not empty"; then
-                    echo "---"
-                    echo "**rm -rf failed** with 'Directory not empty' error."
-                    echo "Employing Secondary Strategy: $find_strategy"
-                    
-                    # Secondary Strategy: Use find -depth to remove contents first
-                    find "$target" -depth -name '*' -exec rm -rf {} +
-                    
-                    # Try to remove the now-empty parent directory
-                    if rmdir "$target"; then
-                        echo "**Secondary strategy successful**: Directory removed."
-                    else
-                        echo "---"
-                        echo "Error: Secondary strategy failed. Directory may still be protected (e.g., active mount, special permissions)."
-                        echo "Original rm output was: $rm_output"
-                        echo "---"
-                    fi
-                else
-                    # Report a different rm -rf error
-                    echo "Error: rm -rf failed on $target for an unknown reason."
-                    echo "Original rm output was: $rm_output"
-                fi
-            fi
-
+            removeDirectory "$target"
         else
             echo "$target exists but is neither a file nor a directory (e.g., a symbolic link or socket)."
         fi
@@ -104,7 +71,50 @@ function removeCurrentlyLoggedInUserFiles () {
         echo "$target does not exist"
     fi
 }
+function removeDirectory() {
+    local arg1=$1
+    local rm_output="" # Variable to store the output of rm -rf
+    local find_strategy="find"
+    echo "In removeDirectory target $arg1"
+    if [[ -d $arg1 ]]; then
+        echo "$arg1 is a directory"
+        echo "Attempt 1: rm -rf $arg1"
 
+        # Execute rm -rf, capture output (stdout and stderr) into rm_output,
+        # and prevent it from printing to the console immediately.
+        # The || true ensures the script continues even if rm fails,
+        # so we can inspect the output.
+        rm_output=$(rm -rf "$arg1" 2>&1)
+        if [ $? -ne 0 ]; then   #if rm -rf exit status is not 0 (success)
+            
+            # Check for the specific "Directory not empty" error in the captured output
+            if echo "$rm_output" | grep -q "Directory not empty"; then
+                echo "---"
+                echo "rm -rf failed with 'Directory not empty' error."
+                echo "Employing Secondary Strategy: $find_strategy"
+
+                # Secondary Strategy: Use find -depth and then rmdir
+                find "$arg1" -depth -name '*' -exec rm -rf {} +
+
+                # Try to remove the now-empty parent directory
+                if rmdir "$arg1"; then
+                    echo "Secondary strategy successful: Directory removed."
+                else
+                    echo "---"
+                    echo "Error: Secondary strategy failed. Directory or remaining contents may be protected (e.g., active mount, special permissions)."
+                    echo "Original rm output was: $rm_output"
+                    echo "---"
+                fi
+            else
+                # Report a different rm -rf error
+                echo "Error: rm -rf failed on $arg1 for an unknown reason."
+                echo "Original rm output was: $rm_output"
+            fi
+        fi
+    else
+        echo "$arg1 is not a directory"
+    fi
+}
 #while arg-1 exists, keep looping - might be unnecessary as Jamf passes in 11 args
 for((i=4;i<=$#;i++)); do
 	if [[ ! -z "${!i}" ]]; then  #if the argument's value is not empty: Jamf passes all arguments to $11

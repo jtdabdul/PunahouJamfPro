@@ -45,7 +45,9 @@ function removeFileOrDirectory () {
 
         # Test to see if $arg1 is a directory
         elif [[ -d $arg1 ]]; then
-            removeDirectory $arg1
+            removeDirectory "$arg1"
+		else
+            echo "$arg1 exists but is neither a file nor a directory (e.g., a symbolic link or socket)."
         fi
 
     else
@@ -66,7 +68,7 @@ function removeDirectory() {
 		# The || true ensures the script continues even if rm fails,
 		# so we can inspect the output.
 		rm_output=$(rm -rf "$arg1" 2>&1)
-		if ! $rm_output; then
+		if [ $? -ne 0 ]; then	#if rm -rf exit status is not 0 (success)
 		    
 			# Check for the specific "Directory not empty" error in the captured output
 			if echo "$rm_output" | grep -q "Directory not empty"; then
@@ -92,6 +94,8 @@ function removeDirectory() {
 		    	echo "Original rm output was: $rm_output"
 		    fi
 		fi
+	else
+		echo "$arg1 is not a directory"
 	fi
 }
 
