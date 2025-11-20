@@ -30,26 +30,60 @@ if [ ! $# > 4 ]; then {
 fi
 
 function removeFileOrDirectory () {
-	arg1=$1
-	#test to see if arg1 exists
-	if [[ -e $arg1 ]]; then {
-		echo "$arg1 exists"
-		#test to see if $arg1 is a file
-		if [[ -f $arg1 ]]; then {
-			echo "$arg1 is a file"
-			echo "remove $arg1"
-            echo "rm $arg1"
-			rm "$arg1" || echo "rm failed on $arg1"
-		} elif [[ -d $arg1 ]]; then {
-			echo "$arg1 is a directory"
-			echo "remove $arg1 recursive"
-			echo "rm -rf $arg1"
-            rm -rf "$arg1" || echo "rm -rf failed on $arg1"
-		}
-	    fi
-	} else {
-	echo "$arg1 does not exist"
-	}
+    local arg1=$1
+    local rm_output="" # Variable to store the output of rm -rf
+    local find_strategy="find"
+
+    # Test to see if arg1 exists
+    if [[ -e $arg1 ]]; then
+        echo "$arg1 exists"
+
+        # Test to see if $arg1 is a file
+        if [[ -f $arg1 ]]; then
+            echo "$arg1 is a file"
+            echo "Removing file: rm $arg1"
+            rm "$arg1" || echo "Error: rm failed on file $arg1"
+
+        # Test to see if $arg1 is a directory
+        elif [[ -d $arg1 ]]; then
+            echo "$arg1 is a directory"
+            echo "Attempt 1: rm -rf $arg1"
+
+            # Execute rm -rf, capture output (stdout and stderr) into rm_output,
+            # and prevent it from printing to the console immediately.
+            # The || true ensures the script continues even if rm fails,
+            # so we can inspect the output.
+            if ! rm -rf "$arg1" 2>&1; then
+                rm_output=$(rm -rf "$arg1" 2>&1)
+                
+                # Check for the specific "Directory not empty" error in the captured output
+                if echo "$rm_output" | grep -q "Directory not empty"; then
+                    echo "---"
+                    echo "rm -rf failed with 'Directory not empty' error."
+                    echo "Employing Secondary Strategy: $find_strategy"
+                    
+                    # Secondary Strategy: Use find -depth and then rmdir
+                    find "$arg1" -depth -name '*' -exec rm -rf {} +
+                    
+                    # Try to remove the now-empty parent directory
+                    if rmdir "$arg1"; then
+                        echo "Secondary strategy successful: Directory removed."
+                    else
+                        echo "---"
+                        echo "Error: Secondary strategy failed. Directory or remaining contents may be protected (e.g., active mount, special permissions)."
+                        echo "Original rm output was: $rm_output"
+                        echo "---"
+                    fi
+                else
+                    # Report a different rm -rf error
+                    echo "Error: rm -rf failed on $arg1 for an unknown reason."
+                    echo "Original rm output was: $rm_output"
+                fi
+            fi
+        fi
+
+    else
+        echo "$arg1 does not exist"
     fi
 }
 
