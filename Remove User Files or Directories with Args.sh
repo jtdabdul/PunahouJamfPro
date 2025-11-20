@@ -75,7 +75,8 @@ function removeDirectory() {
     local arg1=$1
     local rm_output="" # Variable to store the output of rm -rf
     local find_strategy="find"
-    echo "In removeDirectory target $arg1"
+    
+    #echo "In removeDirectory target $arg1"
     if [[ -d $arg1 ]]; then
         echo "$arg1 is a directory"
         echo "Attempt 1: rm -rf $arg1"
