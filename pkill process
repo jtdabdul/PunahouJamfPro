@@ -10,7 +10,8 @@
 #created on 2023/01/17 by JA
 #use a parameter to pass in process name.  old script did not handle if process not running and returned error.  This script should echo a message if process not found instead of returning error.  Either way process should not be running at end of execution (either it was running and was pkilled, or it wasn't running in the first place.
 #Use as part of an uninstall bundle - pkill process, Remove Files or Directories with args, optional Remove User Files or Directories with args
-
+#modified on 2025/12/18 by JA
+#pkill process script extended so that it can accept a process name or a pattern. pattern should be able to handle "xxx|yyy" format to kill any processes matching xxx OR yyy
 
 ###############################################
 ###  Handle Parameters
@@ -21,11 +22,47 @@
 if [[ "$4" != "" ]] && [[ $process == "" ]]; then
     process=$4
 fi
-####### Test for values
-if [[ "$process" == "" ]]; then
-    echo "Check parameter values: not found - exiting with error"
-    echo "process : $process"
-    exit 1
-fi
-pkill $process || echo "process $process not found"
+
+# Function to kill processes based on a pattern
+kill_processes() {
+    local pattern="$1"
+    
+    # Check if the argument is empty
+    if [[ -z "$pattern" ]]; then
+        echo "Usage: $0 <process_name_or_pattern>"
+        echo "Example: $0 \"Google|Chrome|Keystone\""
+        exit 1
+    fi
+
+    echo "Searching for processes matching: '$pattern'..."
+
+    # Check if any processes match the pattern before trying to kill
+    # pgrep -f -i searches the full command line, case-insensitively
+    if pgrep -fi "$pattern" > /dev/null; then
+        echo "Matches found. Sending termination signal..."
+        
+        # pkill -fi:
+        # -f: match against full process name/arguments
+        # -i: ignore case
+        pkill -fi "$pattern"
+        
+        # Check exit status of pkill
+        if [[ $? -eq 0 ]]; then
+            echo "Successfully signaled processes matching '$pattern'."
+        else
+            echo "Failed to kill some processes. You may need sudo permissions."
+        fi
+    else
+        echo "No running processes found matching '$pattern'."
+    fi
+}
+# Execute the function with the first script argument
+kill_processes "$4"
+# ####### Test for values
+# if [[ "$process" == "" ]]; then
+#     echo "Check parameter values: not found - exiting with error"
+#     echo "process : $process"
+#     exit 1
+# fi
+# pkill $process || echo "process $process not found"
 exit 0
