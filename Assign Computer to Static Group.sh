@@ -9,6 +9,7 @@
 #   updated on 2022/12/29 by JA to use Bearer Token Auth
 #   updated on 2023/01/12 by JA to add parameter to specify add or remove from group
 #   updated on 2025/02/28 by JA to add optional parameter to require macOS versions in a comma separated list
+#   updated on 2025/10/01 by JA to use clientID and clientSECRET
 #Parameter 4
 #JSS URL
 #Parameter 5
@@ -117,7 +118,7 @@ if [[ "$URL" == "" ]] || [[ "$apiUsername" == "" ]] || [[ "$apiPassword" == "" ]
     echo "Check parameter values - exiting with error"
     echo "URL : $URL"
     echo "apiUsername : $apiUsername"
-    echo "apiPassword : $apiPassword"
+    #echo "apiPassword : $apiPassword"
     echo "staticGroupID : $staticGroupID"
     exit 1
 fi
