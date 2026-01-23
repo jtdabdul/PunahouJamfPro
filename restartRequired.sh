@@ -28,6 +28,9 @@
 ##################################################################
 # History
 # Version 1.0 by Jason Abdul on 2026/01/22
+# Modified by JA 2026/01/23 to reduce external dependency - implement brandedRestartPrompt in script
+#	create functions for cleanup (rm flag file and call static group remove), branded restart prompt and branded restart notification
+
 ##################################################################
 
 
@@ -66,6 +69,13 @@ function cleanUp() {
 	rm -f $FLAG_FILE
 	jamf policy -event staticGroupRemoveRestartRequired
 }
+function brandedRestartPrompt() {
+	#this function should return 0 - button1 (restart) or 2 - button2 defer/timeout 
+	echo ("/Library/Application Support/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper" -windowType utility -icon /Library/Punahou/256x256PunahouSeal-transparent.png -title "System Restart Required" -description "Your computer needs to be restarted within $THRESHOLD_DAYS days.  You may restart now by clicking Restart, or be prompted again in 15 minutes by clicking Defer" -button1 "Restart" -button2 "Defer" -defaultButton 2 -timeout 120 -countdown)
+}
+function brandedRestartNotification() {
+	"/Library/Application Support/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper" -windowType utility -icon /Library/Punahou/256x256PunahouSeal-transparent.png -title "System Restart Required" -description "Your computer has not been restarted within the $THRESHOLD_DAYS day deadline.  Restart is imminent" -button1 "OK" -defaultButton 1 -timeout 30 -countdown
+}
 ##################################################################
 
 ##################################################################
@@ -91,9 +101,7 @@ if [ "$(getBootInterval)" -lt "$(getFileInterval)" ]; then
 		echo "File Interval= $(getFileInterval)"
 		echo "Computer rebooted already, clean up (remove from static group, remove flag file)"
 	fi
-	rm -f $FLAG_FILE
-	jamf policy -event staticGroupRemoveRestartRequired
-#	cleanUp
+	cleanUp
 	exit 0
 fi
 #####  DO NOT UNCOMMENT unless you are explicitly testing for old file interval (deadline passed).  This will always fail and execute the else
@@ -108,13 +116,19 @@ if [ "$(getFileInterval)" -lt "$THRESHOLD_SECONDS" ]; then
 		echo "Deadline not met.  Prompt user for restart or defer"
 	fi
 	# this jamf policy will prompt user to defer or restart, calls policy -event clearCache on restart
-	jamf policy -event brandedRestartPrompt
+	#jamf policy -event brandedRestartPrompt
+	if [ brandedRestartPrompt ]; then
+		echo "User chose Restart.  Clean up and then clear cache restart"
+		cleanUp
+		jamf policy -event "clearCache"
+	else
+		echo "User chose defer, or prompt timed out"
+	fi
 else
-	echo "Deadline passed, force reboot"
-	rm -f $FLAG_FILE
-	# Stage for ToDo 1.
-	#cleanUp
-	"/Library/Application Support/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper" -windowType utility -icon /Library/Punahou/256x256PunahouSeal-transparent.png -heading "System Restart Required" -description "Your computer has not been restarted within the 3 day deadline.  Restart is imminent" -button1 "OK" -defaultButton 1 -timeout 30 -countdown
+	echo "Deadline passed.  Clean up and clear cache restart"
+	cleanUp
+	brandedRestartNotification
+#	"/Library/Application Support/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper" -windowType utility -icon /Library/Punahou/256x256PunahouSeal-transparent.png -heading "System Restart Required" -description "Your computer has not been restarted within the 3 day deadline.  Restart is imminent" -button1 "OK" -defaultButton 1 -timeout 30 -countdown
 	# this jamf policy will remove computer from static group 689 (Restart Required), clear cache and restart, it will also clear the flag file
 	jamf policy -event clearCache
 fi
