@@ -12,7 +12,8 @@
 #	This script will accept parameters:
 #	4-match TRUE|FALSE - Match or Do Not Match 
 #	5-publicIP (single value or list of IPv4 addresses) 
-# 	6-policyTrigger (single value or list of values).  
+# 	6-policyTriggersSuccess (single value or list of space delimited values). 
+#	7-policyTriggersFail (single value or list of space delimited values) 
 #	Script will query the computer it is running on for it's public IP address and then compare it 
 #	to the values(s) passed in on publicIP.  
 #	TRUE|FALSE to match the return value of the onNetwork function, indicating the condition to be 
@@ -21,19 +22,20 @@
 # DESCRIPTION
 #	Computer is tested for myPublicIP and compared to the publicIP(s) of the parameter.
 #	onNetwork function output compared to desired match parameter (TRUE|FALSE) on|off provided list
-#	if value is matched, call the policyTrigger(s) in order.
+#	if value is matched, call the policyTriggersSuccess in order.
 #	No user logged in, on|off network not matched ot no internet connection will result in failure
-#	This will allow us to use optionally policy retry on failure setting in the case of policy
-#	trigger recurring check in.  This allows the policy to run a number of times and then stop running on success
+#	On failure, call the policyTriggersFail in order, if found.
 # 
 ####################################################################################################
 #
 # HISTORY
 #
 #	Modified on 2025/11/13 by Jason Abdul to add parameter handling for match (TRUE|FALSE), both 
-#	publicIP and policyTrigger to handle a single value or an array.  onCampus function to be 
+#	publicIP and policyTriggersSuccess to handle a single value or an array.  onCampus function to be 
 #	generalized to onNetwork and return true or false indicating if the device is currently 
 #	on or off the specifed network.
+#	Modified on 2025/11/14 by Jason Abdul to implement function to call policy triggers, add 
+#	functionality to run policy triggers on failure
 #
 ####################################################################################################
 
@@ -55,17 +57,25 @@ if [[ "$publicIP" == "" ]]; then
 	echo "Input parameter not found: publicIP"
 	exit 1
 fi
-if [[ "$6" != "" ]] && [[ $policyTrigger == "" ]]; then
-	policyTrigger=$6
+if [[ "$6" != "" ]] && [[ $policyTriggersSuccess == "" ]]; then
+	policyTriggersSuccess=$6
 fi
-if [[ "$policyTrigger" == "" ]]; then
-	echo "Input parameter not found: policyTrigger"
+if [[ "$policyTriggersSuccess" == "" ]]; then
+	echo "Input parameter not found: policyTriggersSuccess"
 	exit 1
+fi
+if [[ "$7" != "" ]] && [[ $policyTriggersFail == "" ]]; then
+	policyTriggersFail=$7
+fi
+if [[ "$policyTriggersFail" == "" ]]; then
+	echo "Input parameter not found: policyTriggersFail"
+	# exit 1
 fi
 #debug only
 echo "match: $match"
 echo "publicIP: $publicIP"
-echo "policyTrigger: $policyTrigger"
+echo "policyTriggersSuccess: $policyTriggersSuccess"
+echo "policyTriggersFail: $policyTriggersFail"
 ###############################################
 ###  Functions
 ###############################################
@@ -99,6 +109,17 @@ function isUserLoggedIn {
     	echo "TRUE"
     fi
 }
+runPolicyTriggers() {
+	# echo "Number of arguments: $#"
+	# echo "All arguments (one per line):"
+	for arg in "$@"; do
+		# echo "- $arg"
+		echo "running policyTrigger $arg"
+		sudo /usr/local/bin/jamf policy -event $arg
+	done
+	# echo "First argument: $1"
+	# echo "Second argument: $2"
+}
 ###############################################
 ###  Main
 ###############################################
@@ -112,13 +133,10 @@ echo "My Public IP is in publicIP: $foo"
 
 if [[ $(onNetwork) == $match ]]; then
 	echo "Network status test success: $match"
-	for item in $policyTrigger; do
-		echo "running policyTrigger $item"
-		sudo /usr/local/bin/jamf policy -event $item
-#	jamf policy -event AddToExcludeFromOldWifiProfile
-	done
+	runPolicyTriggers $policyTriggersSuccess
 	exit 0
 else
 	echo "Network status not matched, exiting"
+	[[ $policyTriggersFail != "" ]] && runPolicyTriggers $policyTriggersFail
 	exit 1
 fi

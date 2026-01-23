@@ -198,6 +198,7 @@ DEPNotify "Command: Image: ${LOGOFILE}"
 DEPNotify "Command: MainText: Configuring Machine."
 DEPNotify "Status: Setting Computer Name"
 jamfCommand configureComputer
+DEPNotify "Status: Install Punahou processes"
 jamfCommand createERD
 jamfCommand installJamfRestart
 jamfCommand installInventorySNOW
@@ -258,7 +259,9 @@ DEPNotify "Status: Arctic Wolf install"
 jamfCommand ArcticWolf
 
 # Submit inventory
-jamfCommand recon
+DEPNotify "Command: MainText: Apply Punahou security patch to your computer"
+DEPNotify "Status: Please enter your password at the prompt"
+jamfCommand passSecureToken
 
 #added 2020/10/05 by JA - attempt to put a button on the splash screen which needs to be clicked to close DEPNotify
 DEPNotify "Command: MainText: Configuration Complete!"

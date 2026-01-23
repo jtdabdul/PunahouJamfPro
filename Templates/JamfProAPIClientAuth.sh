@@ -68,15 +68,6 @@ if [[ "$url" == "" ]] || [[ "$client_id" == "" ]] || [[ "$client_secret" == "" ]
 fi
 
 ##############################################
-###  Environment Variables
-##############################################
-# These values are obtained by running the encryptString function
-# These values will need to be re-generated and updated in the script each time the client secret is rotated
-salt="440a343caef9a617"
-passphrase="0491df58e5c45bebc4e773ca"
-##############################################
-
-##############################################
 ###  Functions
 ##############################################
 # Added on 2025/10/16 by JA to handle secret decryption
@@ -143,18 +134,15 @@ invalidateToken() {
 ###  Main Block
 ################################################
 
-########################
-### Setup Environment ###
+##############################################
+###  Setup Environment
+##############################################
 
 #Variable declarations
 access_token=""
 token_expiration_epoch="0"
 
-#decode the secret with the salt and passphrase
-#if you intend to pass the client secret unencrypted to this script then comment the next line of code
-client_secret=$(DecryptString "$client_secret" "$salt" "$passphrase")
-
-### End Setup Environment ###
+### End Setup Environment ####################
 
 ########################
 ### Sample Usage code from Recipe 
@@ -168,9 +156,21 @@ client_secret=$(DecryptString "$client_secret" "$salt" "$passphrase")
 # curl -H "Authorization: Bearer $access_token" $url/api/v1/jamf-pro-version -X GET
 ### End Sample Code ###
 
-########################
-### Your Code Here
-########################
+#####################################################################################
+###########################    Your Code Here
+#####################################################################################
+
+##############################################
+###  Environment Variables
+##############################################
+# These values are obtained by running the encryptString function
+# These values will need to be re-generated and updated in the script each time the client secret is rotated
+salt="440a343caef9a617"
+passphrase="0491df58e5c45bebc4e773ca"
+##############################################
+#decode the secret with the salt and passphrase
+#if you intend to pass the client secret unencrypted to this script then comment the next line of code
+client_secret=$(DecryptString "$client_secret" "$salt" "$passphrase")
 
 checkTokenExpiration
 
