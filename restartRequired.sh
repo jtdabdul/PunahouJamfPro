@@ -30,7 +30,7 @@
 # Version 1.0 by Jason Abdul on 2026/01/22
 # Modified by JA 2026/01/23 to reduce external dependency - implement brandedRestartPrompt in script
 #	create functions for cleanup (rm flag file and call static group remove), branded restart prompt and branded restart notification
-
+#	include jamf prompts in script to remove dependency on external policy.  Implement policy call to static group remove in function to remove requirement for these tasks to be bundled to the clearCache policy
 ##################################################################
 
 
