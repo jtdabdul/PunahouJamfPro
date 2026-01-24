@@ -71,7 +71,8 @@ function cleanUp() {
 }
 function brandedRestartPrompt() {
 	#this function should return 0 - button1 (restart) or 2 - button2 defer/timeout 
-	echo ("/Library/Application Support/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper" -windowType utility -icon /Library/Punahou/256x256PunahouSeal-transparent.png -title "System Restart Required" -description "Your computer needs to be restarted within $THRESHOLD_DAYS days.  You may restart now by clicking Restart, or be prompted again in 15 minutes by clicking Defer" -button1 "Restart" -button2 "Defer" -defaultButton 2 -timeout 120 -countdown)
+	local RESULT=$("/Library/Application Support/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper" -windowType utility -icon /Library/Punahou/256x256PunahouSeal-transparent.png -title "System Restart Required" -description "Your computer needs to be restarted within $THRESHOLD_DAYS days.  You may restart now by clicking Restart, or be prompted again in 15 minutes by clicking Defer" -button1 "Restart" -button2 "Defer" -defaultButton 2 -timeout 120 -countdown)
+	echo $RESULT
 }
 function brandedRestartNotification() {
 	"/Library/Application Support/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper" -windowType utility -icon /Library/Punahou/256x256PunahouSeal-transparent.png -title "System Restart Required" -description "Your computer has not been restarted within the $THRESHOLD_DAYS day deadline.  Restart is imminent" -button1 "OK" -defaultButton 1 -timeout 30 -countdown
@@ -106,7 +107,7 @@ if [ "$(getBootInterval)" -lt "$(getFileInterval)" ]; then
 fi
 #####  DO NOT UNCOMMENT unless you are explicitly testing for old file interval (deadline passed).  This will always fail and execute the else
 #testFileInterval=(("$(getFileInterval)"+"$THRESHOLD_SECONDS"))
-#if [ "$testFileInterval" -lt "$THRESHOLD_SECONDS" ]; then
+#if [ "$THRESHOLD_SECONDS" -lt "$THRESHOLD_SECONDS" ]; then
 
 if [ "$(getFileInterval)" -lt "$THRESHOLD_SECONDS" ]; then
 	if [ $DEBUG ]; then
@@ -115,12 +116,12 @@ if [ "$(getFileInterval)" -lt "$THRESHOLD_SECONDS" ]; then
 		echo "Threshold Seconds= $THRESHOLD_SECONDS"
 		echo "Deadline not met.  Prompt user for restart or defer"
 	fi
-	# this jamf policy will prompt user to defer or restart, calls policy -event clearCache on restart
-	#jamf policy -event brandedRestartPrompt
-	if [ brandedRestartPrompt ]; then
-		echo "User chose Restart.  Clean up and then clear cache restart"
+	userChoice=$(brandedRestartPrompt)
+	[ $DEBUG ] && echo "User Choice: $userChoice"
+	if [ $userChoice == 0 ]; then
+		echo "User chose Restart.  Clean up and clear cache restart"
 		cleanUp
-		jamf policy -event "clearCache"
+		jamf policy -event clearCache
 	else
 		echo "User chose defer, or prompt timed out"
 	fi
@@ -128,8 +129,6 @@ else
 	echo "Deadline passed.  Clean up and clear cache restart"
 	cleanUp
 	brandedRestartNotification
-#	"/Library/Application Support/JAMF/bin/jamfHelper.app/Contents/MacOS/jamfHelper" -windowType utility -icon /Library/Punahou/256x256PunahouSeal-transparent.png -heading "System Restart Required" -description "Your computer has not been restarted within the 3 day deadline.  Restart is imminent" -button1 "OK" -defaultButton 1 -timeout 30 -countdown
-	# this jamf policy will remove computer from static group 689 (Restart Required), clear cache and restart, it will also clear the flag file
 	jamf policy -event clearCache
 fi
 exit 0
