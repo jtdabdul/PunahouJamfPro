@@ -120,7 +120,7 @@ if [ "$(getFileInterval)" -lt "$THRESHOLD_SECONDS" ]; then
 	if [ $userChoice == 0 ]; then
 		echo "User chose Restart.  Clean up and clear cache restart"
 		cleanUp
-		jamf policy -event clearCache
+		jamf policy -event clearCache &
 	else
 		echo "User chose defer, or prompt timed out"
 	fi
