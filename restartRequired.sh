@@ -45,7 +45,7 @@ fi
 # Environent variables
 THRESHOLD_SECONDS=$(($THRESHOLD_DAYS * 24 * 60 * 60));
 FLAG_FILE="/Library/Punahou/.restartRequired"
-DEBUG=1
+DEBUG="TRUE"
 ##################################################################
 
 ##################################################################
@@ -92,7 +92,7 @@ fi
 #$DIFF_SECONDS=$((NOW - $flagFileAge))
 #echo "interval $DIFF_SECONDS"
 #
-[ $DEBUG ] && echo "boot interval= $(getBootInterval)"
+[[ $DEBUG == "TRUE" ]] && echo "boot interval= $(getBootInterval)"
 
 if [ "$(getBootInterval)" -lt "$(getFileInterval)" ]; then
 	#Computer has independently rebooted since being required to do so
@@ -113,10 +113,10 @@ if [ "$(getFileInterval)" -lt "$THRESHOLD_SECONDS" ]; then
 		echo "File Interval= $(getFileInterval)"
 		echo "Threshold Days= $THRESHOLD_DAYS"
 		echo "Threshold Seconds= $THRESHOLD_SECONDS"
-		echo "Deadline not met.  Prompt user for restart or defer"
 	fi
+	echo "Deadline not met.  Prompt user for restart or defer"
 	userChoice=$(brandedRestartPrompt)
-	[ $DEBUG ] && echo "User Choice: $userChoice"
+	[[ $DEBUG == "TRUE" ]] && echo "User Choice: $userChoice"
 	if [ $userChoice == 0 ]; then
 		echo "User chose Restart.  Clean up and clear cache restart"
 		cleanUp
@@ -128,6 +128,6 @@ else
 	echo "Deadline passed.  Clean up and clear cache restart"
 	cleanUp
 	brandedRestartNotification
-	jamf policy -event clearCache
+	jamf policy -event clearCache &
 fi
 exit 0
