@@ -96,6 +96,7 @@ runAsUser() {
 #	create functions for cleanup (rm flag file and call static group remove), branded restart prompt and branded restart notification
 #	include jamf prompts in script to remove dependency on external policy.  Implement policy call to static group remove in function to remove requirement for these tasks to be bundled to the clearCache policy
 # Modified by JA 2026/02/04 to add proposed default header.  Improves logging and includes optional logging to local file.
+# Modified by JA 2026/02/18 clearCache policy is redundant.  Change policy event call to reuse easyButton (Fast) to reboot computer and clear caches instead.
 ##################################################################
 
 
@@ -191,7 +192,7 @@ if [ "$(getFileInterval)" -lt "$THRESHOLD_SECONDS" ]; then
 	if [[ "$userChoice" == "0" ]]; then
 		log "User chose Restart.  Clean up and clear cache restart"
 		cleanUp
-		jamf policy -event clearCache &
+		jamf policy -event easyButton &
 	else
 		log "User chose defer, or prompt timed out"
 	fi
@@ -199,7 +200,7 @@ else
 	log "Deadline passed.  Clean up and clear cache restart"
 	cleanUp
 	brandedRestartNotification
-	jamf policy -event clearCache &
+	jamf policy -event easyButton &
 fi
 log "################## End $APPLICATION (took $((( (`strftime %s` - `date -jf $LogDateFormat $starttime +%s`) ))) seconds)"
 exit 0
