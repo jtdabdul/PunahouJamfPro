@@ -172,6 +172,7 @@ if [ "$(getBootInterval)" -lt "$(getFileInterval)" ]; then
 		log "Boot Interval= $(getBootInterval)"
 		log "File Interval= $(getFileInterval)"
 		log "Computer rebooted already, clean up (remove from static group, remove flag file)"
+		log "################## End $APPLICATION (took $((( (`strftime %s` - `date -jf $LogDateFormat $starttime +%s`) ))) seconds)"
 	fi
 	cleanUp
 	exit 0
