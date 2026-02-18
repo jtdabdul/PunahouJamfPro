@@ -110,6 +110,7 @@ else
 fi
 ##################################################################
 # Environent variables
+VERSIONDATE='20260218'        # Format YYYYMMDD - used for version control
 APPLICATION="RestartRequired"
 THRESHOLD_SECONDS=$(($THRESHOLD_DAYS * 24 * 60 * 60));
 FLAG_FILE="/Library/Punahou/.restartRequired"
