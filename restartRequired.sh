@@ -77,8 +77,8 @@ runAsUser() {
 # check for flag file existence and touch(create) if not found
 # check if user has rebooted on their own - if flag file age is > boot time interval - remove from static group and exit, preventing further execution
 # If computer has not yet rebooted, check to see if the threshold deadline is reached (days parameter passed in to script)
-# deadline not reached, prompt user - button 2 (defer) do nothing and wait for next run.  button 1 (restart) clean up flag file and static group, then call clearcache
-# deadline reached - prompt restart imminent, call clearCache policy
+# deadline not reached, prompt user - button 2 (defer) do nothing and wait for next run.  button 1 (restart) clean up flag file and static group, then call easyButton
+# deadline reached - prompt restart imminent, call easyButton policy
 
 ##################################################################
 # To Do
