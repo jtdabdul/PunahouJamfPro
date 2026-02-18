@@ -83,7 +83,7 @@ runAsUser() {
 ##################################################################
 # To Do
 # 1. Clearcache policy could be more reusable if we decouple the static group remove and remove flag file steps - validate that these can be handled by callign the existing static group remove, then calling clearCache.  remove flag file may be redundant, as it is explicitly removed in the script
-# 2. Can the Branded prompt be implemented within this script, to eliminate an eternal dependency?
+# 2. Can the Branded prompt be implemented within this script, to eliminate an eternal dependency? - JA 2026/01/23
 #	if we do this, should we create a restart function which can be called from either the deadline or the user's choice at the prompt? - completed 2026/01/23
 # Try this after the current deployment is completed so that the reconfiguration can be tested
 
