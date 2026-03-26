@@ -18,7 +18,11 @@ LOCKED_THRESHOLD=604800       # If the computer is locked for this long (7 days)
 SHUTDOWN_THRESHOLD=2592000    # If the computer is locked for this long (30 days) then prompt for shutdown.
 MINSWVERSION=13               # Minimum macOS version required to run this script
 DATADOGAPI=""                 # Add your Datadog API key here to enable Datadog logging, otherwise leave blank. NOTE: Mann recommends encryping your API keys.
-icon="/Library/Punahou/256x256PunahouSeal-transparent.png"                       # Path to icon to use in jamfHelper windows  
+icon=""                       # Path to icon to use in jamfHelper windows  
+#JA 2026-02-05 - must define Application Name and Log file here or the first logging will not be able to see these values (logging starts before the end of the header)
+APPLICATION="TestDefaultHeader"
+LOCAL_LOG_FILE="/Library/Punahou/logs/$APPLICATION.log"	# Path to local log file, otherwise leave blank
+#End JA 2026-02-05				
 #MARK: Start Default Header
 ##### Start Default Header 20250925
 zmodload zsh/datetime
@@ -38,8 +42,9 @@ readonly JSSURL=$(defaults read /Library/Preferences/com.jamfsoftware.jamf.plist
          computername=${computername:-$(scutil --get ComputerName 2>/dev/null)} \
          serialnumber=${serialnumber:-$(ioreg -d2 -c IOPlatformExpertDevice | awk -F\" '/IOPlatformSerialNumber/{print $(NF-1)}')} \
          SESSIONID=${jamfVarJSSID}-$RANDOM
+
 declare -rA levels=(DEBUG 0 INFO 1 WARN 2 ERROR 3)
-LOGGING=INFO DATADOGLOGGING=INFO
+LOGGING=DEBUG DATADOGLOGGING=INFO
 
 printlog() {
   [[ -z "$2" ]] && 2=INFO
@@ -79,9 +84,19 @@ printlog() {
   previous_log_message="$log_message"; previous_log_priority="$log_priority"
   [[ ${levels[$log_priority]:-0} -ge ${levels[$LOGGING]:-1} ]] && { echo "$timestamp $log_priority: $log_message"; logger -t "Mann-$APPLICATION" "Mann-$APPLICATION: $log_message" &|; }
   [[ -n "$DATADOGAPI" && ${levels[$log_priority]:-0} -ge ${levels[$DATADOGLOGGING]:-1} ]] && send_to_datadog "$log_message" "$log_priority"
-  if [[ -n $leftOver ]]; then printlog $leftOver $log_priority; fi
+	#JA 2026-02-05
+    [[ -n "LOCAL_LOG_FILE" && ${levels[$log_priority]:-0} -ge ${levels[$LOGGING]:-1} ]] && send_to_local_log_file "$log_message" "$log_priority"
+    #end JA 2026-02-05
+	if [[ -n $leftOver ]]; then printlog $leftOver $log_priority; fi
 }
-
+#JA 2026-02-05
+send_to_local_log_file() {
+	local msg="$1" level="$2"
+    local timestamp=$(strftime '%Y-%m-%d %H:%M:%S')
+    [[ -n "LOCAL_LOG_FILE" ]] && [[ ! -d ${LOCAL_LOG_FILE:h} ]] && mkdir ${LOCAL_LOG_FILE:h}
+    echo "$timestamp $level: $msg" >> $LOCAL_LOG_FILE
+}
+#End JA 2026-02-05
 send_to_datadog() {
   local msg="$1" level="$2"
   ((INDEX++))
@@ -114,8 +129,9 @@ jamfPrettyExit() {
 
 cleanupAndExit() { # $1 = exit code, $2 message
   printlog "$2" $3
-  jamfPrettyExit "$2"
   printlog "################## End $APPLICATION (took $((( (`strftime %s` - `date -jf $LogDateFormat $starttime +%s`) ))) seconds)" INFO
+  jamfPrettyExit "$2"
+#  printlog "################## End $APPLICATION (took $((( (`strftime %s` - `date -jf $LogDateFormat $starttime +%s`) ))) seconds)" INFO
   exit "$1"
 }
 ### End Logging
@@ -228,13 +244,24 @@ fi
 printlog "Hello! This is a test script with a debug statement." DEBUG
 
 # Use runAsUser to run commands as the current user, like Jamf helper.  Stuff shouldn't run as root unless it needs to.
-runAsUser "$jamfHelper" -windowType utility -title  "Good Day Check" -description "Hi, I hope you're having a good day!" -icon "$icon" -timeout 1200 -defaultButton 1 -button1 "I am" -button2 "Go away"
-
+userChoice=$(runAsUser "$jamfHelper" -windowType utility -title  "Good Day Check" -description "Hi, I hope you're having a good day!" -icon "$icon" -timeout 1200 -defaultButton 1 -button1 "I am" -button2 "Go away")
+if [[ $userChoice == "0" ]]; then
+	printlog "User is having a good day"
+else
+	printlog "User wants up to go away"
+fi
 # Do more scripty stuff here, possibly come across an error.
-#printlog "This is only a test of an error. Maybe include install.log? $(tail -n 100 /var/log/install.log)" ERROR
 printlog "This is only a test of an error. Maybe include install.log?" ERROR
+
 # Do even more scripty stuff here, printa. quick log.
 printlog "Goodbye! This was only a test." INFO
+
+#JA 2026-0205
+#test WARN
+printlog "this is a test Warning" WARN
+#test ERROR
+printlog "this is another test ERROR" ERROR
+#End JA 2026-02-05
 
 if [[ -d "/Applications/Google Chrome.app" ]]; then
   cleanupAndExit 0 "Google Chrome is installed, script completed successfully." INFO
