@@ -138,6 +138,7 @@ cat > "$PLIST_PATH" << SWAMP
     <string>$IDENTIFIER</string>
     <key>ProgramArguments</key>
     <array>
+        <string>time</string>
         <string>/bin/bash</string>
         <string>$SCRIPT_PATH</string>
     </array>
