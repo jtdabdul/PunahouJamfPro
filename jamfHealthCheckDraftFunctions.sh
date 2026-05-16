@@ -10,6 +10,9 @@ function getJamfLogTimestamp() {
 	echo $(echo "$1" | cut -d' ' -f1,2,3,4)
 }
 function timestampEpochSeconds() {
+	#pass in date/timestamp
+	# jamf log file format starts each line with Date Time formatted "%a %b %d %H:%M:%S"
+	#use date function to convert to epoch seconds
 	echo $(date -j -f "%a %b %d %H:%M:%S" "$1" "+%s")
 }
 function getLastTimeStampStringFromFile() {
@@ -18,12 +21,11 @@ function getLastTimeStampStringFromFile() {
 	#return the date time in epoch seconds
 	string=$1
 	file=$2
-	dateTimeFormatted=$(grep "$string" $file | tail -n 1 | cut -d' ' -f1,2,3,4)
-#	echo "date time: $dateTimeFormatted"
+	#grep the input string from the file, and take only the last of the matched lines
 	logLine=$(grep "$string" $file | tail -n 1)
+	#extract the date/time from the log line
 	dateTimeFormatted=$(getJamfLogTimestamp "$logLine")
-	
-#	epochSeconds=$(date -j -f "%a %b %d %H:%M:%S" "$dateTimeFormatted" "+%s")
+	#convert the date time to epoch seconds
 	epochSeconds=$(timestampEpochSeconds "$dateTimeFormatted")
 	echo $epochSeconds
 }
@@ -89,3 +91,4 @@ function lastInventoryOld() {
 	else
 		echo "last inventory is current, do nothing"
 	fi
+	
