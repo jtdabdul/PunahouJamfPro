@@ -77,20 +77,7 @@ runAsUser() {
 #
 # if computer is rebooted 
 
-set_defaults() {
-#Script configuration
-SCRIPT_FOLDER="/Library/Punahou/Scripts"
-readonly SCRIPT_FOLDER
-SCRIPT_NAME="restartRequiredwithLaunchDaemon.sh"
-readonly SCRIPT_NAME
-SCRIPT_PATH="$SCRIPT_FOLDER/$SCRIPT_NAME"
-#launchDaemon
-DAILY_LABEL="com.punahou.reboot.daily"
-DEFER_LABEL="com.punahou.reboot.defer"
-DAILY_PLIST="/Library/LaunchDaemons/$DAILY_LABEL.plist"
-DEFER_PLIST="/Library/LaunchDaemons/$DEFER_LABEL.plist"
 
-}
 # --- Functions ---
 
 write_daemon() {
@@ -176,16 +163,16 @@ workflow_installation() {
 ###### Script configuration ############
 SCRIPT_FOLDER="/Library/Punahou/Scripts"
 readonly SCRIPT_FOLDER
-SCRIPT_NAME="restartRequiredwithLaunchDaemon.sh"
+SCRIPT_NAME="rebootRequiredwithLaunchDaemon.sh"
 readonly SCRIPT_NAME
 SCRIPT_PATH="$SCRIPT_FOLDER/$SCRIPT_NAME"
 ###### launchDaemon ###############
-DAILY_LABEL="com.punahou.reboot.daily"
-DEFER_LABEL="com.punahou.reboot.defer"
+DAILY_LABEL="com.punahou.rebootRequired.daily"
+DEFER_LABEL="com.punahou.rebootRequired.defer"
 DAILY_PLIST="/Library/LaunchDaemons/$DAILY_LABEL.plist"
 DEFER_PLIST="/Library/LaunchDaemons/$DEFER_LABEL.plist"
 ##### Log Configuration ###############
-LOCAL_LOG_FILE="/var/log/restartRequiredwithLaunchDaemon.log"
+LOCAL_LOG_FILE="/var/log/rebootRequiredwithLaunchDaemon.log"
 ##### Local Config file ###############
 DEADLINE_FILE="/Library/Application Support/reboot_deadline.plist"
 ############/Local Files ###############
@@ -206,9 +193,10 @@ log "Hello! I am running successfully from $SCRIPT_PATH"
 UPTIME_SECONDS=$(sysctl -n kern.boottime | awk -F'[ ,]' '{print $4}')
 CURRENT_TIME=$(date +%s)
 UPTIME_DAYS=$(( (CURRENT_TIME - UPTIME_SECONDS) / 86400 ))
+log "UPTIME $UPTIME_DAYS found"
 
 if [ "$UPTIME_DAYS" -lt "$UPTIME_THRESHOLD" ]; then
-    log "System is fresh ($UPTIME_DAYS); ensure only daily daemon exists"
+    log "System is fresh ($UPTIME_DAYS is < $UPTIME_THRESHOLD); ensure only daily daemon exists"
     log "unload defer launchdaemon and delete files"
     launchctl unload "$DEFER_PLIST" 2>/dev/null
     rm -f "$DEFER_PLIST" "$DEADLINE_FILE"
@@ -247,7 +235,7 @@ RESPONSE=$($jamfHelper -windowType utility -icon $icon -title "Punahou School" -
 log "User chose $RESPONSE"
 log "get rightmost digit from RESPONSE - JamfHelper stores which button was used in the rightmost digit if delayOptions are used"
 BUTTON=$(( $RESPONSE % 10 ))
-log "button $BUTTON was pressed, 1:button 1 (restart now); 2:button 2 (Defer/Delay)"
+log "button $BUTTON was pressed, 1:button 1 (restart now); 2:button 2 (Defer/Delay) - button2 can also be \"pressed\" by timeout"
 
 ### working here
 if [[ $BUTTON == 1 ]]; then
