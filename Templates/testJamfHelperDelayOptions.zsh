@@ -39,10 +39,10 @@ else #BUTTON 2 was used or timeout was reached
 	log "user chose to defer for $SECONDS_TO_WAIT seconds, set up launchdaemon to wake up after $SECONDS_TO_WAIT"
 	# Disable the daily check so it doesn't fire while we are in a deferral loop
 	log "disable Daily launchdaemon $DAILY_LABEL"
-	launchctl unload "$DAILY_PLIST" 2>/dev/null
-	remove_daemon "$DAILY_LABEL" "$DAILY_PLIST"
+	#launchctl unload "$DAILY_PLIST" 2>/dev/null
+	#remove_daemon "$DAILY_LABEL" "$DAILY_PLIST"
 	# Write the deferral daemon to fire once the time expires
 	log "write launchdaemon $DEFER_LABEL to launch in $SECONDS_TO_WAIT and exit"
-	write_daemon "$DEFER_LABEL" "$DEFER_PLIST" "$SECONDS_TO_WAIT"
+	#write_daemon "$DEFER_LABEL" "$DEFER_PLIST" "$SECONDS_TO_WAIT"
 	exit 0
 fi

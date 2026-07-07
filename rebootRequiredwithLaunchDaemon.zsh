@@ -75,7 +75,8 @@ runAsUser() {
 # else prompt user to reboot now or defer
 # if defer, set a launchdaemon to ask again after deferral time has elapsed
 #
-# if computer is rebooted 
+# if computer is rebooted independedntly between execution, uptime should be below threshold and script will set daily launchdaemon and sleep
+
 
 
 # --- Functions ---
@@ -139,22 +140,25 @@ workflow_installation() {
 	    cp "$CURRENT_SOURCE" "$SCRIPT_PATH"
 	    chmod +x "$SCRIPT_PATH"
 
+			### HANDLE LAUNCHDAEMON
+			if [[ -f $DAILY_PLIST ]]; then
+				log "Installation: Removing previous LaunchDaemon: $DAILY_PLIST"
+				launchctl bootout "system/${DAILY_LABEL}" >/dev/null 2>&1
+				#replace with this:?
+				#launchctl unload "$DAILY_PLIST" 2>/dev/null 
+				rm -f "DAILY_PLIST" 2>/dev/null
+			fi
+			#write the daily launchdaemon, set to run in one day
+			log "write the daily launchdaemon"
+			write_daemon "$DAILY_LABEL" "$DAILY_PLIST" 86400
+			### END HANDLE LAUNCHDAEMON
+	    
 	    log "Installation complete. Running from new location..."
 	    
 	    # 3. Execute the installed version and exit the current process
 	    exec "$SCRIPT_PATH" "$@"
 	fi
-	### HANDLE LAUNCHDAEMON
-  if [[ -f $DAILY_PLIST ]]; then
-      log "Installation: Removing previous LaunchDaemon: $DAILY_PLIST"
-      launchctl bootout "system/${DAILY_LABEL}" >/dev/null 2>&1
-      #replace with this:?
-      #launchctl unload "$DAILY_PLIST" 2>/dev/null 
-      rm -f "DAILY_PLIST" 2>/dev/null
-  fi
-  #write the daily launchdaemon, set to run in one day
-  log "write the daily launchdaemon"
-  write_daemon "$DAILY_LABEL" "$DAILY_PLIST" 86400
+	
 }
 ###################### MAIN #############################
 
@@ -174,13 +178,18 @@ DEFER_PLIST="/Library/LaunchDaemons/$DEFER_LABEL.plist"
 ##### Log Configuration ###############
 LOCAL_LOG_FILE="/var/log/rebootRequiredwithLaunchDaemon.log"
 ##### Local Config file ###############
-DEADLINE_FILE="/Library/Application Support/reboot_deadline.plist"
+DEADLINE_FILE="/Library/Punahou/reboot_deadline.plist"
 ############/Local Files ###############
 ############ Environment Variables ###############
 #testing use 1 day uptime threshold.
-UPTIME_THRESHOLD=0 # Days
+UPTIME_THRESHOLD=1 # Days
 #UPTIME_THRESHOLD=30 # Days
-DEFER_THRESHOLD=3      # Days to comply
+DEFER_THRESHOLD=1      # Days to comply
+############ JamfHelper Variables ################
+JAMFHELPER_TITLE="Punahou School"
+JAMFHELPER_HEADING="Reboot is required."
+JAMFHELPER_HEADING_FORCE="Reboot deadline expired."
+JAMFHELPER_TIMEOUT=60
 ############/Environment Variables ###############
 
 # --- Main Logic ---
@@ -200,7 +209,7 @@ if [ "$UPTIME_DAYS" -lt "$UPTIME_THRESHOLD" ]; then
     log "unload defer launchdaemon and delete files"
     launchctl unload "$DEFER_PLIST" 2>/dev/null
     rm -f "$DEFER_PLIST" "$DEADLINE_FILE"
-    log "go back to sleep"
+    log "go back to sleep.  Relaunch scheduled for $(strftime "%Y-%m-%d %H:%M:%S" $(( EPOCHSECONDS + 86400 )))"
     #do I have to put the daily launchdaemon back here?  put back if not found?
     exit 0
 fi
@@ -220,7 +229,7 @@ log "deadline file found, $REMAINING second until deadline"
 # 3. Check Enforcement
 if [ "$REMAINING" -le 0 ]; then
 	log "Enforcement deadline reached, prompt user briefly and restart"
-	$jamfHelper -windowType utility -icon $icon -title "Punahou School" -heading "Reboot deadline passed." -description "Your computer will reboot in 60 seconds" -button1 OK -timeout "60" -countdown
+	$jamfHelper -windowType utility -icon $icon -title $JAMFHELPER_TITLE -heading "$JAMFHELPER_HEADING_FORCE" -description "Your computer will reboot in 60 seconds" -button1 OK -timeout "$JAMFHELPER_TIMEOUT" -countdown
 	shutdown -r now
 	exit 0
 fi
@@ -228,7 +237,7 @@ fi
 # 4. Prompt User
 # Note: In a LaunchDaemon, we must target the user session for GUI
 #USER_ID=$(stat -f%u /dev/console) - Jamfhelper apparently knows how to access the user's gui
-RESPONSE=$($jamfHelper -windowType utility -icon $icon -title "Punahou School" -heading "Super Important" -description "Please make a selection" -button1 "Restart Now" -button2 "Defer" -defaultButton 2 -showDelayOptions "900, 3600, 14400, 86400" -timeout "60" -countdown)
+RESPONSE=$($jamfHelper -windowType utility -icon $icon -title $JAMFHELPER_TITLE -heading "$JAMFHELPER_HEADING" -description "You may choose to reboot now, or you can defer.  Please make a selection" -button1 "Restart Now" -button2 "Defer" -defaultButton 2 -showDelayOptions "900, 3600, 14400, 86400" -timeout "$JAMFHELPER_TIMEOUT" -countdown)
 #jamfhelper defer options return the delay time followed by 1 (for clicking the OK button/button 1) ex: 0 returns 1, 900 returns 9001, 3600 returns 36001, etc. Button 2 appends a 2 on the DelayOptions selected value
 #in order to have the timeout behavior default to the shorted delay, and ensure timeout does not result in restart now, defaultButton set to button 2
 
@@ -252,65 +261,7 @@ else #BUTTON 2 was used or timeout was reached
 	launchctl unload "$DAILY_PLIST" 2>/dev/null
 	remove_daemon "$DAILY_LABEL" "$DAILY_PLIST"
 	# Write the deferral daemon to fire once the time expires
-	log "write launchdaemon $DEFER_LABEL to launch in $SECONDS_TO_WAIT and exit"
+	log "write launchdaemon $DEFER_LABEL to launch in $SECONDS_TO_WAIT and exit. Relaunch scheduled for $(strftime "%Y-%m-%d %H:%M:%S" $(( EPOCHSECONDS + SECONDS_TO_WAIT )))"
 	write_daemon "$DEFER_LABEL" "$DEFER_PLIST" "$SECONDS_TO_WAIT"
 	exit 0
 fi
-# # 5. Handle Action
-# case "$RESPONSE" in
-#     *"Restart Now"*)
-#     		log "User chose to restart now"
-#     		#do I have to put the daily launchdaemon back here?  put back if not found? 
-#         shutdown -r now
-#         ;;
-#     *)
-#         # Extract minutes from the button label
-#         MINS=$(echo "$RESPONSE" | grep -oE '[0-9]+')
-#         SECONDS_TO_WAIT=$(( MINS * 60 ))
-#         log "user chose to defer for $MINS, set up launchdaemon to wake up after $MINS"
-#         # Disable the daily check so it doesn't fire while we are in a deferral loop
-#         launchctl unload "$DAILY_PLIST" 2>/dev/null
-        
-#         # Write the deferral daemon to fire once the time expires
-#         write_daemon "$DEFER_LABEL" "$DEFER_PLIST" "$SECONDS_TO_WAIT"
-#         exit 0
-#         ;;
-# esac
-
-#handle_launchdaemon(){
-#if no launchdaemon is running 
-#	write a launch daemon that runs once a day (time or interval) should call the script
-#}
-
-#restart_cleanup(){
-#	delete the restart_required file 
-#	handle_launchdaemon #
-#}
-
-# if boot_time < threshold_time then 
-	#handle_launchdaemon
-	#exit 0
-# else #boot time >= threshold time
-#	 if a restart_required file ! exist
-#		 write a restart_required file
-#	 else # restart required file exists
-
-#if restartrequired file exists
-# if boot_time < threshold_time then #check if the device has been rebooted independently of this process
-	# call restart_cleanup fn
-# else
-#		if restart_required_file_age > restart_required_interval
-#			call restart_cleanup fn#call restart cleanup to clear flag file and reinstate main launchdaemon
-#			restart computer
-#		else
-#			prompt the user to restart, provide delay options #delay options should not be allowed to be beyond the restart_required_interval
-#			read user response
-#			if user selected restart now
-#				call restart_cleanup fn #call restart cleanup to clear flag file and reinstate main launchdaemon
-#				restart computer
-#			else
-#				read the delayOption value
-#				write a restart_required_launchdaemon specifying the delayOptions time for next launch
-#else #we should not get here - this would indicate that the threshold has been reached, but there is no restart_required file
-# log error
-# exit 1

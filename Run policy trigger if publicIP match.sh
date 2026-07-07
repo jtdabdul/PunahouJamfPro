@@ -79,6 +79,26 @@ echo "policyTriggersFail: $policyTriggersFail"
 ###############################################
 ###  Functions
 ###############################################
+# function onNetwork() {
+# 	myPublicIP=$(curl ifconfig.me)
+# 	#check exit code of previous command
+# 	if [ $? -ne 0 ]; then
+# 		echo "Error: no internet connection"
+# 		#no internet connection should not return false - we are using false to indicate that the computer is off campus.  Function should behave take no action in case of not connected
+#         exit 1
+# 	fi
+# 	#echo "$myPublicIP"
+#     #this is a list of the public IP addresses used by Punahou, if I am on campus my public IP should be in this list
+# 	#items=("204.107.82.3" "204.107.82.240" "204.107.82.241" "204.107.82.242" "204.107.82.243" "204.107.82.244" "204.107.82.245" "204.107.82.246" "204.107.82.253" "204.107.82.250")
+# 	for item in $publicIP; do
+# 		if [[ $item == $myPublicIP ]]; then
+# 			echo "TRUE"
+# 			exit 0
+# 		fi
+# 	done
+# 	#if IP not found in the list, return FALSE
+# 	echo "FALSE"
+# }
 function onNetwork() {
 	myPublicIP=$(curl ifconfig.me)
 	#check exit code of previous command
@@ -87,17 +107,20 @@ function onNetwork() {
 		#no internet connection should not return false - we are using false to indicate that the computer is off campus.  Function should behave take no action in case of not connected
         exit 1
 	fi
-	#echo "$myPublicIP"
-    #this is a list of the public IP addresses used by Punahou, if I am on campus my public IP should be in this list
-	#items=("204.107.82.3" "204.107.82.240" "204.107.82.241" "204.107.82.242" "204.107.82.243" "204.107.82.244" "204.107.82.245" "204.107.82.246" "204.107.82.253" "204.107.82.250")
-	for item in $publicIP; do
-		if [[ $item == $myPublicIP ]]; then
+	# echo "Number of arguments: $#"
+	# echo "All arguments (one per line):"
+	for arg in "$@"; do
+		# echo "- $arg"
+		echo "checking $arg match $myPublicIP" >> /Users/Shared/test.log
+		if [[ $arg == $myPublicIP ]]; then
 			echo "TRUE"
 			exit 0
 		fi
 	done
 	#if IP not found in the list, return FALSE
 	echo "FALSE"
+	# echo "First argument: $1"
+	# echo "Second argument: $2"
 }
 function isUserLoggedIn {
 	
@@ -128,10 +151,10 @@ if [[ isUserLoggedIn == "FALSE" ]]; then
 	echo "No user logged in"
     exit 1
     fi
-foo=$(onNetwork)
+foo=$(onNetwork $publicIP)
 echo "My Public IP is in publicIP: $foo"
 
-if [[ $(onNetwork) == $match ]]; then
+if [[ $foo == $match ]]; then
 	echo "Network status test success: $match"
 	runPolicyTriggers $policyTriggersSuccess
 	exit 0
