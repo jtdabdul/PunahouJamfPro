@@ -15,13 +15,14 @@
 
 set_defaults() {
 # Path to the script working folder
-SCRIPT_FOLDER="/Library/Punahou/Scripts"
-readonly SCRIPT_FOLDER
-SCRIPT_NAME="SystemProfilerInventoryUploadToSNOW.sh"
-readonly SCRIPT_NAME
-LAUNCH_DAEMON_LABEL="com.punahou.inventorySNOW"	#no trailing ".plist"
-readonly LAUNCH_DAEMON_LABEL
-INSTALL_PATH="$SCRIPT_FOLDER/$SCRIPT_NAME"
+	SCRIPT_FOLDER="/Library/Scripts"
+	readonly SCRIPT_FOLDER
+	SCRIPT_NAME="SystemProfilerInventoryUploadToSNOW.sh"
+	readonly SCRIPT_NAME
+	LAUNCH_DAEMON_LABEL="com.punahou.inventorySNOW"	#no trailing ".plist"
+	readonly LAUNCH_DAEMON_LABEL
+	INSTALL_PATH="$SCRIPT_FOLDER/$SCRIPT_NAME"
+	LOCAL_LOG_FILE="/Library/Punahou/ApplicationsCheck.log"
 }
 #super 3600
 workflow_installation() {
@@ -48,23 +49,48 @@ workflow_installation() {
 	fi
 #	cp "$0" "${SCRIPT_FOLDER}/${SCRIPT_NAME}" >/dev/null 2>&1
 }
-###################### MAIN #############################
-set_defaults
-workflow_installation
-
-# --- Your Actual Script Starts Here ---
-echo "Hello! I am running successfully from $INSTALL_PATH"
-
-scriptfile="/Library/Scripts/SystemProfilerInventoryUploadToSNOW.sh"
-### Handle Script
-echo "Handle script first"
-echo "Remove script $scriptPath if found"
-rm -f $scriptfile	#remove the script if it exists
-cat << 'EOF' > $scriptfile
-#!/bin/bash
-logfile="/Library/Punahou/ApplicationsCheck.log"
-exec 1>> "$logfile"
-exec 2>&1
+handle_plist() {
+	plistPath="/Library/LaunchDaemons/$LAUNCH_DAEMON_LABEL.plist"
+	####Unload the PLIST
+	if [[ -f "$plistPath" ]]; then
+		echo "Plist File Found: Bootout"
+		sudo launchctl bootout system "$plistPath"
+		rm -rf $plistPath
+	else
+		echo "Plist File not found"
+	fi
+	
+	cat << EOF > $plistPath
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>$LAUNCH_DAEMON_LABEL</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>$INSTALL_PATH</string>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StartInterval</key>
+	<integer>14400</integer>
+	<key>StandardErrorPath</key>
+	<string>/Library/Punahou/ApplicationsCheck.log</string>
+</dict>
+</plist>
+EOF
+	
+	chmod 644 $plistPath
+	chown root:wheel $plistPath
+	echo "LaunchDaemon created at $plistPath"
+	ls -l $plistPath
+	plutil -lint $plistPath
+	
+	echo "Load LaunchDaemon"
+	/bin/launchctl load -w $plistPath
+}
 function inventoryUploadToSNOW() {
 	echo ""
 	echo `date +%Y-%m-%d\ %H:%M:%S`
@@ -91,6 +117,18 @@ function inventoryUploadToSNOW() {
 	--data "@$file" \
 	--user 'device_collector_software':'3hQX8}[$],jq^4PWY}hURLBT1raoqw*%94;Fc^a%Sh}D]1ko}sfskua{Q2BS_%%cM9n]NdD?zH--BQJ@k-JZ8m3yrqm{ZN=^zmn$'
 }
+###################### MAIN #############################
+set_defaults
+workflow_installation
+handle_plist 
+# --- Your Actual Script Starts Here ---
+echo "Hello! I am running successfully from $INSTALL_PATH"
+
+
+logfile="/Library/Punahou/ApplicationsCheck.log"
+exec 1>> "$logfile"
+exec 2>&1
+
 ###Template for launchDaemon to run script at shorter interval - execute the function only if 24 hours have passed since last run
 # File to store the last execution time
 LAST_RUN_FILE="/Library/Punahou/InventorySNOW.last_run_time"
@@ -125,52 +163,8 @@ else
 fi
 
 exit 0
-EOF
 
-chmod 644 $scriptfile
-chown root:wheel $scriptfile
-#chmod +x $scriptfile
-echo "Script created at $scriptfile"
+
 ls -l $scriptfile
-###Handle Plist
-plistPath="/Library/LaunchDaemons/com.punahou.inventorySNOW.plist"
-####Unload the PLIST
-if [[ -f "$plistPath" ]]; then
-	echo "Plist File Found: Bootout"
-	sudo launchctl bootout system "$plistPath"
-	rm -rf $plistPath
-else
-	echo "Plist File not found"
-fi
 
-cat << EOF > $plistPath
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>Label</key>
-	<string>com.punahou.inventorySNOW</string>
-	<key>ProgramArguments</key>
-	<array>
-		<string>/bin/bash</string>
-		<string>/Library/Scripts/SystemProfilerInventoryUploadToSNOW.sh</string>
-	</array>
-	<key>RunAtLoad</key>
-	<false/>
-	<key>StartInterval</key>
-	<integer>14400</integer>
-    <key>StandardErrorPath</key>
-    <string>/Library/Punahou/ApplicationsCheck.log</string>
-</dict>
-</plist>
-EOF
-
-chmod 644 $plistPath
-chown root:wheel $plistPath
-echo "LaunchDaemon created at $plistPath"
-ls -l $plistPath
-plutil -lint $plistPath
-
-echo "Load LaunchDaemon"
-/bin/launchctl load -w $plistPath
 #tail -f /var/log/system.log
