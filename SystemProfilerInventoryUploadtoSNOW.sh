@@ -9,9 +9,10 @@
 # Note:			This is a starter header, to be updated in the future.  
 #				Used Mann Consulting JNUC2025 header for reference. https://mann.com/jnuc2025
 # History:		Created on 2026/02/04 by JA
+#         Modified 2026/07/10 by JA - update logging - implement log levels, add caller functions named to imply the second parameter
 ########################################################################################################################
 ### Global Variables
-VERSIONDATE='20260707'        # Format YYYYMMDD - used for version control
+VERSIONDATE='20260710'        # Format YYYYMMDD - used for version control
 APPLICATION="ApplicationName" # Change to your application name for logging
 LOCKED_THRESHOLD=604800       # If the computer is locked for this long (7 days) then exit to prevent issues with Jamf policies blocking other policies.
 SHUTDOWN_THRESHOLD=2592000    # If the computer is locked for this long (30 days) then prompt for shutdown.
@@ -35,7 +36,8 @@ jamfHelper="/Library/Application Support/JAMF/bin/jamfHelper.app/Contents/MacOS/
 LogDateFormat="%Y-%m-%d %H:%M:%S"
 starttime=$(date +"$LogDateFormat")
 LOCAL_LOG_FILE=""			# Add file path to enable local logging, otherwise leave blank
-
+#declare -rA levels=([DEBUG]=0 [INFO]=1 [WARN]=2 [ERROR]=3)
+LOGGING="INFO"  #default log level set at info, in main this can be overwritten
 
 ### Start Logging 20250728
 readonly jamfVarJSSID=$(defaults read "/Library/Managed Preferences/com.mann.jamfuserdata.plist" JSSID 2>/dev/null || echo 0)
@@ -45,13 +47,47 @@ computername=${computername:-$(scutil --get ComputerName 2>/dev/null)} \
 serialnumber=${serialnumber:-$(ioreg -d2 -c IOPlatformExpertDevice | awk -F\" '/IOPlatformSerialNumber/{print $(NF-1)}')} \
 SESSIONID=${jamfVarJSSID}-$RANDOM
 ### Start logMessage 20260204
+getPriorityLevel() {
+	case "$1" in
+		DEBUG)  echo 0 ;;
+		INFO)   echo 1 ;;
+		WARN)   echo 2 ;;
+		ERROR)  echo 3 ;;
+		*)      echo 1 ;; #default fallback
+	esac
+}
 logMessage() {
+	[[ -z "$1" ]] && return   #do nothing and exit function if no arguments are passed
 	local message="$1"
-	if [[ "$LOCAL_LOG_FILE" == "" ]]; then
-		echo "$(date +"$LogDateFormat") - $message"
-	else
-		echo "$(date +"$LogDateFormat") - $message" | tee -a "$LOCAL_LOG_FILE"
+	local logPriority=${2:-INFO}  #Default to INFO if no second argument is passed
+	
+	#get numeric priorities using the getPriorityLevel helper function
+	local currentPriority=$(getPriorityLevel "$logPriority")
+	local minPriority=$(getPriorityLevel "$LOGGING")
+	
+	if [[ $currentPriority -ge $minPriority ]]; then
+		if [[ -z "$LOCAL_LOG_FILE" ]]; then
+			echo "$(date +"$LogDateFormat") [$logPriority] - $message"
+		else
+			echo "$(date +"$LogDateFormat") [$logPriority] - $message" | tee -a "$LOCAL_LOG_FILE"
+		fi
 	fi
+}
+log() { #instead of renaming the function, add a caller function for backwards compatibility
+	logMessage "$1" "$2"
+}
+#Add some additional logging functions to allow for single parameter logs with log priority identified in the function name
+logINFO() {
+	logMessage "$1" INFO
+}
+logDEBUG() {
+	logMessage "$1" DEBUG
+}
+logWARN() {
+	logMessage "$1" WARN
+}
+logERROR() {
+	logMessage "$1" ERROR
 }
 ### End logMessage
 ### Start runAsUser 20240419
@@ -76,7 +112,7 @@ runAsUser() {
 # Modified 2024/10/28 by JA - Jamf400 class template applied and modified to include logging from previous version
 # Modified 2025/03/04 by JA - update SNOW user/pass and upload URL to put reporting into production
 # Modified 2026/07/07 by JA - update script to use self installing template instead of HEREDOC to install the script on the client.
-
+# Modified 2026/07/10 by JA - update logging
 set_defaults() {
 # Path to the script working folder
 	SCRIPT_FOLDER="/Library/Scripts"
@@ -96,8 +132,8 @@ workflow_installation() {
 
 	# 2. Check if the current location matches the intended install path
 	if [ "$CURRENT_SOURCE" != "$INSTALL_PATH" ]; then
-	    echo "Current location: $CURRENT_SOURCE"
-	    echo "Installing to:    $INSTALL_PATH"
+	    logDEBUG "Current location: $CURRENT_SOURCE"
+	    logDEBUG "Installing to:    $INSTALL_PATH"
 
 	    # Create the directory if it doesn't exist
 	    [[ ! -d "${SCRIPT_FOLDER}" ]] && mkdir -p "$SCRIPT_FOLDER"
@@ -106,7 +142,7 @@ workflow_installation() {
 	    cp "$CURRENT_SOURCE" "$INSTALL_PATH"
 	    chmod +x "$INSTALL_PATH"
 
-	    echo "Installation complete. Running from new location..."
+	    log "Installation complete. Running from new location..."
 	    
 	    # 3. Execute the installed version and exit the current process
 	    exec "$INSTALL_PATH" "$@"
@@ -149,27 +185,27 @@ EOF
 	#compare the heredoc with the existing plist
 	if [  -f "$plistPath" ] && diff -q <(plutil -convert json -o - - <<< "$PLIST_CONTENT") \
 		<(plutil -convert json -o - "$plistPath") > /dev/null; then
-			echo "Success: the plist matches the heredoc exactly"
-			echo "validate launchdaemon is running"
+			logDEBUG "Success: the plist matches the heredoc exactly"
+			logDEBUG "validate launchdaemon is running"
 			
 			if sudo launchctl print system/"$LAUNCH_DAEMON_LABEL" > /dev/null 2>&1; then
-				echo "launchdaemon is running"
+				logDEBUG "launchdaemon is running"
 			else
-				echo "launchdaemon is not running.  loading plist"
+				logDEBUG "launchdaemon is not running.  loading plist"
 				sudo launchctl bootstrap system "$plistPath"
 			fi
 			return 0
 		else
-			echo "heredoc does not match the existing plist file, or file doesn't exist"
+			log "heredoc does not match the existing plist file, or file doesn't exist"
 		fi
 	
 	####Unload the PLIST
 	if [[ -f "$plistPath" ]]; then
-		echo "Plist File Found: Bootout"
+		logDEBUG "Plist File Found: Bootout"
 		sudo launchctl bootout system "$plistPath"
 		rm -rf $plistPath
 	else
-		echo "Plist File not found"
+		log "Plist File not found"
 	fi
 	#write the PLIST_CONTENT to the plistPath
 	echo "$PLIST_CONTENT" > $plistPath
@@ -181,12 +217,12 @@ EOF
 	plutil -lint $plistPath
 	defaults read $plistPath
 	
-	echo "Load LaunchDaemon"
+	logDEBUG "Load LaunchDaemon"
 	#	/bin/launchctl load -w $plistPath
 	sudo /bin/launchctl bootstrap system "$plistPath"
 }
 function inventoryUploadToSNOW() {
-	logMessage "Upload to SNow"
+	log "Upload to SNow"
 	file="/Library/Punahou/applicationOutput.json"	#provide file path for applicationOutput.json
 	temp="/Library/Punahou/temp.json"	#provide file path for temp.json
 	# Get the serial number
@@ -203,7 +239,7 @@ function inventoryUploadToSNOW() {
 	sed "s/SPApplicationsDataType/records/g" $file > $temp
 	mv $temp $file
 	#push file to SNOW
-	logMessage $(curl "https://punahou.service-now.com/api/now/import/x_punsc_device_dat_computer_software_instance_import_set/insertMultiple" \
+	log $(curl "https://punahou.service-now.com/api/now/import/x_punsc_device_dat_computer_software_instance_import_set/insertMultiple" \
 	--request POST \
 	--header "Accept:application/json" \
 	--header "Content-Type:application/json" \
@@ -246,11 +282,14 @@ check_interval() {
 	fi
 }
 ###################### MAIN #############################
+#LOGGING="DEBUG"
+APPLICATION="SystemProfilerInventoryUploadToSNow"
+log "start $APPLICATION"
 set_defaults
 workflow_installation
 
 # --- Your Actual Script Starts Here ---
-echo "Hello! I am running successfully from $INSTALL_PATH"
+logDEBUG "Hello! I am running successfully from $INSTALL_PATH"
 handle_plist 
 # 2026-07-08 Current approach will not consider a 24 hour run interval.  Instead whenever the script is called we will attempt to upload inventory to SNow
 #if check_interval 86400; then
@@ -259,7 +298,8 @@ handle_plist
 #else
 #	logMessage "Too soon. Skipping task"
 #fi
-inventoryUploadToSNOW 
+inventoryUploadToSNOW
+log "end $APPLICATION"
 exit 0
 
 #tail -f /var/log/system.log
