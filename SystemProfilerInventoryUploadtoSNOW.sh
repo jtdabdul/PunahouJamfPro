@@ -113,6 +113,7 @@ runAsUser() {
 # Modified 2025/03/04 by JA - update SNOW user/pass and upload URL to put reporting into production
 # Modified 2026/07/07 by JA - update script to use self installing template instead of HEREDOC to install the script on the client.
 # Modified 2026/07/10 by JA - update logging
+# Modified 2026/07/13 by JA - log "start $APPLICATION" not showing up in log file because it is called before set_defaults specified the log file.  Moved set defaults to run before we start logging
 set_defaults() {
 # Path to the script working folder
 	SCRIPT_FOLDER="/Library/Scripts"
