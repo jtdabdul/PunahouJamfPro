@@ -284,8 +284,8 @@ check_interval() {
 ###################### MAIN #############################
 #LOGGING="DEBUG"
 APPLICATION="SystemProfilerInventoryUploadToSNow"
-log "start $APPLICATION"
 set_defaults
+log "start $APPLICATION"
 workflow_installation
 
 # --- Your Actual Script Starts Here ---
