@@ -13,10 +13,13 @@ getFirst() {
 getLast() {
 	echo "$1" | tail -n 1
 }
-
+#if no log file is found, return empty result
+if [ ! -f $logfile ]; then
+	echo "<result></result>"
+	exit 0
+fi
 #get all return codes by matching the dialog_result string, then filter out known non-error codes with grep
-#suppress error output for tail $logfile to catch file does not exist
-result=$(tail -n 300 $logfile 2> /dev/null | awk -F'dialog_return is: ' '/dialog_return is:/ {print $2}' | grep -Ev '^(0|2|3|4|200)$')
+result=$(tail -n 300 $logfile | awk -F'dialog_return is: ' '/dialog_return is:/ {print $2}' | grep -Ev '^(0|2|3|4|200)$')
 
 #if there is more than one hit on the 'dialog return is:' string - we will get multiple values back from awk.
 #we only want one integer for the result
@@ -32,3 +35,4 @@ result=$(getLast "$result") #if there is more than one, return the last
 
 [[ -z $result ]] && result=0 #if the function returns nothing, then result set to 0, a non-error state.
 echo "<result>$result</result>"
+exit 0
