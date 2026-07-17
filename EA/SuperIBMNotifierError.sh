@@ -1,6 +1,7 @@
 #!/bin/bash
 logfile="/Library/Management/super/logs/super.log"
 #logfile="/Users/jabdul/Documents/sampleSuper.log"
+#logfile="/Users/jabdul/Documents/Super.log"
 
 getLargest() {
 	#if the log contains multiple dialog_return values, keep only the largest value
@@ -12,14 +13,10 @@ getFirst() {
 getLast() {
 	echo "$1" | tail -n 1
 }
-#result=$(tail -n 300 $logfile | awk -F'dialog_return is: ' '/dialog_return is:/ {print $2}')
-#echo "old $result"
-#result=$(echo $result | grep -Ev '^(0|1|2|3|4|200)$')
-#echo "test $result"
-#get all return codes by matching the dialog_result string, then filter out known non-error codes with grep
-result=$(tail -n 300 $logfile | awk -F'dialog_return is: ' '/dialog_return is:/ {print $2}' | grep -Ev '^(0|2|3|4|200)$')
 
-#echo "result $result"	#raw result after grep filter
+#get all return codes by matching the dialog_result string, then filter out known non-error codes with grep
+#suppress error output for tail $logfile to catch file does not exist
+result=$(tail -n 300 $logfile 2> /dev/null | awk -F'dialog_return is: ' '/dialog_return is:/ {print $2}' | grep -Ev '^(0|2|3|4|200)$')
 
 #if there is more than one hit on the 'dialog return is:' string - we will get multiple values back from awk.
 #we only want one integer for the result
