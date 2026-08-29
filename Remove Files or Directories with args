@@ -10,7 +10,7 @@
 #pass in full paths for files or directories to remove from client
 #2023/10/20 added comments to explain the loop to run function on each argument, enumerate the use of $1, $2, $3 in jamf scripts
 #2025/11/20 JA add error catching for "Directory not empty" on rm -rf, attempt to use find to delete all files in the directory first and then remove directory
-#2026/08/28 JA add handling for wildcard * at the end of the path arguments.  Function remove_paths added with assistance from Gemini. Instead of calling removeFileorDirectory function in our main loop, we call remove_paths and call removeFileOrDirectory in the remove_paths function.
+#2026/08/28 JA add handling for wildcard * at the end of the path arguments.  Function remove_paths added with assistance from Gemini. Instead of calling removeFileorDirectory function in our main loop, we call remove_paths and call removeFileOrDirectory in the remove_paths function. remove_paths will call itself if a wildcard is detected with the found files and directories.
 #############
 pathToScript=$0
 pathToPackage=$1
