@@ -14,6 +14,7 @@
 # pass in partial path:  Users/$loggedInUser/path
 # 2024/07/25 - clarification - parameter should be an un-quoted string, paths which contain spaces should not escape each space with a preceding backslash added to comment documentation
 #2025/11/20 JA add error catching for "Directory not empty" on rm -rf, attempt to use find to delete all files in the directory first and then remove directory
+#2026/08/28 JA add handling for trailing wildcards in path arguments passed in to the script.
 pathToScript=$0
 pathToPackage=$1
 targetLocation=$2
