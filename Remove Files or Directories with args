@@ -10,6 +10,7 @@
 #pass in full paths for files or directories to remove from client
 #2023/10/20 added comments to explain the loop to run function on each argument, enumerate the use of $1, $2, $3 in jamf scripts
 #2025/11/20 JA add error catching for "Directory not empty" on rm -rf, attempt to use find to delete all files in the directory first and then remove directory
+#2026/08/28 JA add handling for wildcard * at the end of the path arguments.  Function remove_paths added with assistance from Gemini. Instead of calling removeFileorDirectory function in our main loop, we call remove_paths and call removeFileOrDirectory in the remove_paths function. remove_paths will call itself if a wildcard is detected with the found files and directories.
 #############
 pathToScript=$0
 pathToPackage=$1
@@ -99,7 +100,40 @@ function removeDirectory() {
 		echo "$arg1 is not a directory"
 	fi
 }
-
+remove_paths() {
+	#remove_paths will check the arg value(s) passed in to it for a wildcard, checks for the existence of files or directories at the specified wildcard.  if none are found it will exit, if any are found it will recursively call itself with the matched paths.  If no wildcards are included in the passed in value(s) then it will call removeFileOrDirectory with the path 
+	local target
+	for target in "$@"; do
+		# Check if argument contains a wildcard
+		if [[ "$target" == *'*'* ]]; then
+			# Enable nullglob so unmatched globs expand to an empty array instead of a literal string
+			shopt -s nullglob
+			local expanded_targets=($target)
+			shopt -u nullglob
+			
+			# If the array is empty, no matching files/directories exist
+			if [ ${#expanded_targets[@]} -eq 0 ]; then
+				echo "No files or directories exist at: $target"
+				continue
+			fi
+			
+			# Recursively process matched paths
+			remove_paths "${expanded_targets[@]}"
+			continue
+		fi
+		
+#		# Handle standard paths (no wildcard)
+		removeFileOrDirectory "$target"
+		#Use my functions instead, for more robust logging and directory handling
+#		if [ -d "$target" ]; then
+#			rm -rf "$target"
+#		elif [ -e "$target" ] || [ -L "$target" ]; then
+#			rm "$target"
+#		else
+#			echo "No file or directory exists at: $target"
+#		fi
+	done
+}
 
 #while arg-1 is non-empty, keep looping
 #i starts at 4 because the first three args are predefined by jamf
@@ -109,7 +143,7 @@ function removeDirectory() {
 for((i=4;i<=$#;i++)); do
 	if [[ ! -z "${!i}" ]]; then
 		echo "${!i}"
-		removeFileOrDirectory "${!i}"
+		remove_paths "${!i}"
 	fi
 done
 exit 0
